@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-05-22T02:37:04.479663+00:00",
+  "generated_at": "2026-05-22T04:35:50.641519+00:00",
   "entries": [
     {
       "date": "2026-05-22",
@@ -7,9 +7,9 @@
       "title": "Daily Review",
       "portfolio_balance": 0,
       "portfolio_return_pct": 0,
-      "backtest_return_pct": 0.0,
+      "backtest_return_pct": 41.69,
       "holdings": [],
-      "review": "Portfolio return 0%; latest backtest return 0.0%; holdings 0."
+      "review": "The market shows mixed signals with strong bullish momentum in select small-cap stocks exhibiting high volume and positive price action, while several large-cap names remain in bearish trends or overbought conditions. Cautious optimism is warranted, focusing on quality momentum setups with disciplined risk management."
     }
   ]
 }
