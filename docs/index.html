@@ -134,7 +134,7 @@
         <button type="button" id="withdrawFunds">Withdraw</button>
         <button type="button" id="toggleTrading" class="primary-action">Pause Simulation</button>
         <button type="button" id="sellAll" class="danger-action">Sell All</button>
-        <button type="button" id="resetLocal">Reset Local Controls</button>
+        <button type="button" id="reloadState">Reload State</button>
       </div>
       <p class="status" id="controlStatus"></p>
     </section>
@@ -190,6 +190,7 @@
           <label class="status">Initial capital<input id="btCapital" type="number" min="0" step="1000" value="100000"></label>
           <button type="button" id="runBacktest" class="primary-action">Run Backtest</button>
         </div>
+        <p class="status" id="backendStatus">Checking backend connection...</p>
         <div id="backtestResult" class="status"></div>
       </article>
       <article class="panel">
@@ -228,13 +229,14 @@
     const withdrawFunds = document.querySelector("#withdrawFunds");
     const toggleTrading = document.querySelector("#toggleTrading");
     const sellAll = document.querySelector("#sellAll");
-    const resetLocal = document.querySelector("#resetLocal");
+    const reloadState = document.querySelector("#reloadState");
     const runBacktest = document.querySelector("#runBacktest");
     const btStart = document.querySelector("#btStart");
     const btEnd = document.querySelector("#btEnd");
     const btStyle = document.querySelector("#btStyle");
     const btCapital = document.querySelector("#btCapital");
     const backtestResult = document.querySelector("#backtestResult");
+    const backendStatus = document.querySelector("#backendStatus");
     const serverBacktest = document.querySelector("#serverBacktest");
     const ledgerCalendar = document.querySelector("#ledgerCalendar");
     const controlStatus = document.querySelector("#controlStatus");
@@ -245,10 +247,7 @@
     const sparkline = document.querySelector("#sparkline");
     const tabs = document.querySelectorAll(".tab");
     const views = document.querySelectorAll(".view");
-    const localStateKey = "paperTradingControls";
     let latestData = null;
-    let historyData = null;
-    let ledgerData = null;
 
     function money(value) {
       if (value === null || value === undefined || Number.isNaN(value)) return "n/a";
@@ -264,62 +263,13 @@
       return Number(value) >= 0 ? "positive" : "negative";
     }
 
-    function readLocalState() {
-      try {
-        return JSON.parse(localStorage.getItem(localStateKey)) || {};
-      } catch {
-        return {};
-      }
-    }
-
-    function writeLocalState(nextState) {
-      localStorage.setItem(localStateKey, JSON.stringify(nextState));
-      renderDashboard(latestData);
-    }
-
-    function applyLocalControls(portfolio) {
-      const state = readLocalState();
-      const copy = structuredClone(portfolio || {});
-      copy.holdings = copy.holdings || [];
-      copy.trade_history = copy.trade_history || [];
-      copy.cash = Math.max(0, Number(copy.cash || 0) + Number(state.addedFunds || 0) - Number(state.withdrawnFunds || 0));
-      copy.balance = Math.max(0, Number(copy.balance || 0) + Number(state.addedFunds || 0) - Number(state.withdrawnFunds || 0));
-      copy.local_trading_paused = Boolean(state.paused);
-
-      if (state.liquidatedAt && copy.holdings.length > 0) {
-        const liquidatedValue = copy.holdings.reduce((sum, row) => sum + Number(row.market_value || 0), 0);
-        copy.cash += liquidatedValue;
-        copy.balance = copy.cash;
-        const syntheticTrades = copy.holdings.map(row => ({
-          date: state.liquidatedAt,
-          symbol: row.symbol,
-          side: "SELL",
-          shares: row.shares,
-          price: row.current_price,
-          fee: 0,
-          pnl: row.unrealized_pnl,
-          reason: "Local dashboard sell-all control",
-        }));
-        copy.trade_history = [...copy.trade_history, ...syntheticTrades];
-        copy.holdings = [];
-      }
-
-      if (copy.initial_balance) {
-        copy.total_return_pct = ((copy.balance / copy.initial_balance) - 1) * 100;
-      }
-
-      return copy;
-    }
-
     function renderControlStatus(portfolio) {
-      const state = readLocalState();
-      toggleTrading.textContent = state.paused ? "Start Simulation" : "Pause Simulation";
+      const isEnabled = portfolio.trading_enabled !== false;
+      toggleTrading.textContent = isEnabled ? "Pause Simulation" : "Start Simulation";
       const parts = [
-        state.paused ? "Local display is paused." : "Local display is active.",
-        state.addedFunds ? `Added local funds: ${money(state.addedFunds)}.` : "",
-        state.withdrawnFunds ? `Withdrawn locally: ${money(state.withdrawnFunds)}.` : "",
-        state.liquidatedAt ? `Local sell-all applied at ${state.liquidatedAt}.` : "",
-        "GitHub Actions still controls the scheduled server-side run; persist changes there with repo variables.",
+        isEnabled ? "Backend paper trading is active." : "Backend paper trading is paused.",
+        `Cash: ${money(portfolio.cash)}.`,
+        `Updated: ${portfolio.updated_at ? new Date(portfolio.updated_at).toLocaleString() : "not yet"}.`,
       ].filter(Boolean);
       controlStatus.textContent = parts.join(" ");
     }
@@ -341,7 +291,7 @@
 
     function renderDashboard(data) {
       if (!data) return;
-      const portfolio = applyLocalControls(data.portfolio || {});
+      const portfolio = data.portfolio || {};
       renderSummary(portfolio);
       renderStrategy(portfolio);
       renderSparkline(portfolio.equity_curve || []);
@@ -350,7 +300,7 @@
       renderControlStatus(portfolio);
       renderAutomation(data.automation || {});
       renderServerBacktest(data.backtest || {});
-      renderLedger(data.ledger || ledgerData || {});
+      renderLedger(data.ledger || {});
       cards.innerHTML = (data.stocks || []).map(renderCard).join("");
       llmEl.textContent = JSON.stringify(data.llm_analysis || {}, null, 2);
     }
@@ -506,25 +456,19 @@
 
     async function loadDashboard() {
       try {
-        statusEl.textContent = "Loading latest paper-trading run...";
-        const [response, historyResponse, ledgerResponse] = await Promise.all([
-          fetch(`data/latest.json?ts=${Date.now()}`),
-          fetch(`data/history.json?ts=${Date.now()}`),
-          fetch(`data/ledger.json?ts=${Date.now()}`),
-        ]);
-        if (!response.ok) throw new Error(`Could not load latest.json (${response.status})`);
+        statusEl.textContent = "Loading latest backend state...";
+        const response = await fetch(`/api/dashboard?ts=${Date.now()}`);
+        if (!response.ok) throw new Error(`Backend returned ${response.status}`);
         const data = await response.json();
-        historyData = historyResponse.ok ? await historyResponse.json() : null;
-        ledgerData = ledgerResponse.ok ? await ledgerResponse.json() : null;
-        setBacktestDefaults();
         latestData = data;
+        setBacktestDefaults();
         renderDashboard(data);
         const updated = new Date(data.generated_at).toLocaleString();
-        statusEl.textContent = `Last updated: ${updated} | Symbols scanned: ${(data.symbols || []).length} | Auto-refresh: 30 min`;
+        statusEl.textContent = `Last updated: ${updated} | Symbols scanned: ${(data.symbols || []).length} | Backend: FastAPI`;
       } catch (error) {
         statusEl.innerHTML = `<span class="error">${error.message}</span>`;
         summaryEl.innerHTML = "";
-        llmEl.textContent = "Run the workflow or python src/analyze.py to generate docs/data/latest.json.";
+        llmEl.textContent = "Start the FastAPI app, then refresh this page.";
       }
     }
 
@@ -536,27 +480,23 @@
     });
 
     refresh.addEventListener("click", loadDashboard);
-    addFunds.addEventListener("click", () => {
-      const state = readLocalState();
+    addFunds.addEventListener("click", async () => {
       const amount = Math.max(0, Number(fundAmount.value || 0));
-      writeLocalState({ ...state, addedFunds: Number(state.addedFunds || 0) + amount });
+      await postPaperAction("/api/paper/add-funds", { amount, note: "Dashboard add funds" });
     });
-    withdrawFunds.addEventListener("click", () => {
-      const state = readLocalState();
+    withdrawFunds.addEventListener("click", async () => {
       const amount = Math.max(0, Number(fundAmount.value || 0));
-      writeLocalState({ ...state, withdrawnFunds: Number(state.withdrawnFunds || 0) + amount });
+      await postPaperAction("/api/paper/withdraw", { amount, note: "Dashboard withdrawal" });
     });
-    toggleTrading.addEventListener("click", () => {
-      const state = readLocalState();
-      writeLocalState({ ...state, paused: !state.paused });
+    toggleTrading.addEventListener("click", async () => {
+      const isEnabled = latestData?.portfolio?.trading_enabled !== false;
+      await postPaperAction(isEnabled ? "/api/paper/pause" : "/api/paper/resume");
     });
-    sellAll.addEventListener("click", () => {
-      const state = readLocalState();
-      writeLocalState({ ...state, liquidatedAt: new Date().toISOString().slice(0, 10) });
+    sellAll.addEventListener("click", async () => {
+      await postPaperAction("/api/paper/sell-all");
     });
-    resetLocal.addEventListener("click", () => {
-      localStorage.removeItem(localStateKey);
-      renderDashboard(latestData);
+    reloadState.addEventListener("click", () => {
+      loadDashboard();
     });
     runBacktest.addEventListener("click", async () => {
       const request = {
@@ -567,7 +507,7 @@
       };
       backtestResult.innerHTML = `<p class="status">Running backend AI backtest...</p>`;
       const result = await runBackendBacktest(request);
-      backtestResult.innerHTML = result.error ? `<p class="error">Backend AI backtest failed: ${result.error}. Start FastAPI with uvicorn backend.app:app --reload --host 127.0.0.1 --port 8000.</p>` : `
+      backtestResult.innerHTML = result.error ? `<p class="error">Backend AI backtest failed: ${result.error}.</p>` : `
         <div class="summary">
           <article class="panel"><div class="metric-label">Source</div><div>${result.source}</div></article>
           <article class="panel"><div class="metric-label">Ending Balance</div><div class="metric-value">${money(result.endingBalance)}</div></article>
@@ -581,12 +521,41 @@
     });
     window.addEventListener("resize", () => loadDashboard());
     setInterval(loadDashboard, 30 * 60 * 1000);
+    checkBackendHealth();
     loadDashboard();
+
+    async function postPaperAction(path, body = {}) {
+      try {
+        controlStatus.textContent = "Updating backend paper state...";
+        const response = await fetch(path, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(payload.detail || `Backend returned ${response.status}`);
+        latestData = payload.dashboard || latestData;
+        renderDashboard(latestData);
+      } catch (error) {
+        controlStatus.innerHTML = `<span class="error">${error.message}</span>`;
+      }
+    }
+
+    async function checkBackendHealth() {
+      try {
+        const response = await fetch(`/api/health?ts=${Date.now()}`);
+        if (!response.ok) throw new Error(`Backend returned ${response.status}`);
+        const health = await response.json();
+        backendStatus.textContent = `Backend connected: same origin | DeepSeek ${health.deepseek_configured ? "configured" : "missing"} | OpenAI ${health.openai_configured ? "configured" : "missing"}`;
+      } catch (error) {
+        backendStatus.textContent = `Backend health check failed: ${error.message}`;
+      }
+    }
 
     async function runBackendBacktest({ start, end, style, capital }) {
       if (!start || !end || !capital) return { error: "Choose start date, end date, and initial capital." };
       try {
-        const response = await fetch("/api/backtests", {
+        const response = await fetch("/api/backtest", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -617,11 +586,18 @@
     }
 
     function setBacktestDefaults() {
-      if (!historyData || !historyData.history || btStart.value || btEnd.value) return;
-      const dates = [...new Set(Object.values(historyData.history).flat().map(row => row.date))].sort();
-      if (!dates.length) return;
-      btEnd.value = dates.at(-1);
-      btStart.value = dates[Math.max(0, dates.length - 90)];
+      if (btStart.value || btEnd.value) return;
+      const dates = Object.values(latestData?.history?.history || {}).flat().map(row => row.date).filter(Boolean).sort();
+      if (dates.length) {
+        btEnd.value = dates.at(-1);
+        btStart.value = dates[Math.max(0, dates.length - 90)];
+        return;
+      }
+      const end = new Date();
+      const start = new Date(end);
+      start.setDate(start.getDate() - 90);
+      btEnd.value = end.toISOString().slice(0, 10);
+      btStart.value = start.toISOString().slice(0, 10);
     }
 
     function renderMiniTrades(trades) {

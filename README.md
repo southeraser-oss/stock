@@ -1,24 +1,19 @@
-# Automated Stock Analysis Dashboard
+# Automated Stock Paper Trading Dashboard
 
-This repository builds a static paper-trading stock dashboard with a Python backend and GitHub Pages frontend.
+This project is now a dynamic FastAPI app, not a GitHub Pages static site.
 
-The backend runs every 30 minutes in GitHub Actions, fetches market data from `yfinance`, calculates common technical indicators, runs a simulated trading strategy, optionally calls LLM APIs for screening, and publishes `/docs` as a GitHub Pages site.
+FastAPI serves the dashboard UI at `/`, exposes same-origin APIs under `/api/*`, keeps paper-trading state on the backend, and runs interactive AI backtests from the dates, style, and capital selected in the frontend.
 
-## Features
+The app is for analysis and paper trading only. It does not place real-money orders.
 
-- Fetches stock history from `yfinance`
-- Uses Yahoo Finance screeners plus a broad fallback watchlist instead of only mega-cap tech names
-- Calculates SMA20, SMA60, RSI14, daily return, and volume change
-- Uses DeepSeek for low-cost stock screening when `DEEPSEEK_API_KEY` is available
-- Calls OpenAI Responses API for premium portfolio review when `OPENAI_API_KEY` is present, unless disabled
-- Simulates paper trades with cash balance, total return, holdings, equity curve, and trade history
-- Runs historical backtests with selectable date range, style, and capital
-- Keeps a daily review ledger with a dashboard calendar view
-- Falls back to rule-based analysis when API keys are missing
-- Writes structured output to `docs/data/latest.json`
-- Serves a simple static dashboard from `docs/index.html`
-- Runs every 30 minutes and supports manual workflow runs
-- Analysis and alerts only. No automatic trading.
+## What Runs Where
+
+- `backend/app.py` serves the dashboard and all interactive APIs.
+- `docs/index.html` is the UI, but it is served by FastAPI.
+- `docs/data/*.json` keeps generated analysis, paper state, ledger, and latest backtest output.
+- `data/stock_dashboard.sqlite3` stores backend backtest runs and cash movements.
+- `.github/workflows/analyze.yml` is optional scheduled analysis only. It no longer deploys the site.
+- `render.yaml` contains the Render web-service start command.
 
 ## Local Setup
 
@@ -27,198 +22,104 @@ python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env
-python src/analyze.py
 ```
 
-For the static GitHub Pages-style view, open `docs/index.html` through a local web server so the browser can fetch `docs/data/latest.json`:
+Add keys to `.env` if you want real AI calls:
 
 ```bash
-python -m http.server 8000 --directory docs
+DEEPSEEK_API_KEY=...
+OPENAI_API_KEY=...
 ```
 
-Then visit `http://localhost:8000`.
-
-For the real interactive app, run the FastAPI backend instead:
+Run the app:
 
 ```bash
 uvicorn backend.app:app --reload --host 127.0.0.1 --port 8000
 ```
 
-Then visit `http://127.0.0.1:8000`.
+Open:
 
-In this mode, the Backtest page sends your selected dates, style, and initial capital to `/api/backtests`; the backend runs the analysis, calls AI when keys are configured, saves the result to SQLite, and returns the result to the dashboard.
+```text
+http://127.0.0.1:8000
+```
 
-## Configuration
+## Render Deployment
 
-Use GitHub repository variables for non-secret values:
+Create a new Render Web Service from this repository.
 
-| Name | Default |
-| --- | --- |
-| `USE_OPENAI_PREMIUM` | `auto` |
-| `STOCK_SYMBOLS` | `auto` |
-| `MAX_SYMBOLS` | `35` |
-| `ENABLE_YFINANCE_SCREENERS` | `true` |
-| `SCREENER_COUNT` | `12` |
-| `MODEL_DEEPSEEK` | `deepseek-chat` |
-| `MODEL_OPENAI` | `gpt-4.1-mini` |
-| `DEEPSEEK_MAX_TOKENS` | `900` |
-| `OPENAI_MAX_OUTPUT_TOKENS` | `1200` |
-| `PAPER_CASH_DELTA` | `0` |
-| `PAPER_CASH_DELTA_ID` | `default` |
-| `PAPER_MAX_POSITIONS` | `4` |
-| `PAPER_ALLOCATION_PCT` | `0.24` |
-| `PAPER_FEE_BPS` | `2` |
-| `PAPER_TRADING_ENABLED` | `true` |
-| `PAPER_FORCE_LIQUIDATE` | `false` |
-| `ENABLE_TRADING_SKILLS` | `true` |
-| `TRADING_SKILLS_MAX_CHARS` | `6000` |
-| `HISTORY_PERIOD` | `2y` |
-| `BACKTEST_START_DATE` | empty, rolling window |
-| `BACKTEST_END_DATE` | empty, defaults to today |
-| `BACKTEST_LOOKBACK_DAYS` | `120` |
-| `BACKTEST_STYLE` | `momentum` |
-| `BACKTEST_INITIAL_CAPITAL` | `100000` |
-| `BACKTEST_MAX_POSITIONS` | `5` |
-| `BACKTEST_ALLOCATION_PCT` | `0.2` |
-| `AI_BACKTEST_ENABLED` | `true` |
-| `AI_DAILY_CANDIDATE_LIMIT` | `12` |
-| `DEEPSEEK_DAILY_MAX_TOKENS` | `700` |
-| `AI_BUY_MIN_CONFIDENCE` | `0.55` |
-| `OPENAI_BACKTEST_MAX_OUTPUT_TOKENS` | `1200` |
+Use:
 
-Use GitHub repository secrets for API keys:
+```bash
+uvicorn backend.app:app --host 0.0.0.0 --port $PORT
+```
+
+The included `render.yaml` already sets this start command.
+
+Render free tier can run this app, but its local filesystem is not a durable database. For serious long-running paper-trading history, upgrade to a persistent disk or move the SQLite state to a hosted database.
+
+In Render, add these environment variables:
 
 | Name | Purpose |
 | --- | --- |
-| `DEEPSEEK_API_KEY` | Optional DeepSeek screening |
-| `OPENAI_API_KEY` | Optional premium OpenAI analysis |
+| `DEEPSEEK_API_KEY` | Broad daily AI decisions and repetitive screening |
+| `OPENAI_API_KEY` | Higher-quality synthesis and final reviews |
+| `STOCK_SYMBOLS` | Use `auto` for broad US/HK/CN universe |
+| `MAX_SYMBOLS` | Controls scan/backtest cost |
+| `USE_OPENAI_PREMIUM` | `auto`, `true`, or `false` |
+| `AI_BACKTEST_ENABLED` | `true` to use AI in interactive backtests |
+| `ENABLE_TRADING_SKILLS` | `true` to load Markdown skills from `skills/` |
 
-If API keys are missing, the workflow still succeeds and the dashboard uses rule-based analysis.
+Do not put API keys in frontend files. The browser only calls relative paths like `/api/health`, `/api/dashboard`, `/api/backtest`, and `/api/paper/add-funds`.
+
+## API Routes
+
+- `GET /api/health`
+- `GET /api/dashboard`
+- `GET /api/state`
+- `POST /api/backtest`
+- `POST /api/paper/add-funds`
+- `POST /api/paper/withdraw`
+- `POST /api/paper/pause`
+- `POST /api/paper/resume`
+- `POST /api/paper/sell-all`
 
 ## AI Work Split
 
-DeepSeek and OpenAI are deliberately not used as interchangeable fallbacks.
+DeepSeek and OpenAI are deliberately assigned different jobs.
 
-DeepSeek handles broad, repetitive, lower-cost work: compact indicator review for every tracked symbol, broad screening, watchlist triage, first-pass risk flags, and daily backtest BUY/SELL/HOLD order decisions.
+DeepSeek handles broad, repetitive, lower-cost work: daily BUY/SELL/HOLD decisions, symbol triage, compact indicator review, and first-pass risk flags.
 
-OpenAI handles smaller, higher-quality synthesis: portfolio review, backtest interpretation after the daily DeepSeek decisions are complete, risk diagnosis, final action priorities, and review language.
+OpenAI handles smaller, higher-quality work: final backtest review, portfolio diagnosis, risk synthesis, and decision-quality review.
 
-The output JSON includes `llm_analysis.division_of_labor` so the split is auditable.
+The backtest output reports DeepSeek ok/skipped/error days and OpenAI review status so you can see whether the APIs actually ran.
 
-## Stock Universe
+## Interactive Backtests
 
-Set `STOCK_SYMBOLS=auto` to use Yahoo Finance screeners such as `small_cap_gainers`, `aggressive_small_caps`, `growth_technology_stocks`, and `undervalued_growth_stocks`.
+The frontend sends your selected start date, end date, style, and capital to `/api/backtest`.
 
-If the screener call fails, the app falls back to a broader watchlist that includes mega-cap, growth, small-cap, and high-beta names. Use `MAX_SYMBOLS` to control cost and runtime.
+The backend then fetches market data, runs the simulation day by day, calls DeepSeek for AI orders when enabled, applies simulated buy/sell actions, and calls OpenAI once at the end for review.
 
-## Dashboard Controls
+You do not need to edit GitHub Variables for every backtest.
 
-The static dashboard includes local controls for adding funds, pausing/resuming the displayed simulation, and selling all visible paper positions.
+## Paper Trading Controls
 
-Because GitHub Pages is static, these buttons update the browser-local view with `localStorage`. Server-side scheduled runs are controlled by GitHub repository variables such as `PAPER_CASH_DELTA`, `PAPER_CASH_DELTA_ID`, `PAPER_TRADING_ENABLED`, and `PAPER_FORCE_LIQUIDATE`.
+The dashboard buttons are backend actions:
 
-For server-side deposits, set `PAPER_CASH_DELTA` to a positive amount and change `PAPER_CASH_DELTA_ID` to a new unique value. For withdrawals, use a negative `PAPER_CASH_DELTA`. The ID prevents the 30-minute workflow from applying the same cash movement repeatedly.
+- Add funds writes cash into backend paper state.
+- Withdraw deducts available cash.
+- Pause/Start updates backend trading status.
+- Sell All liquidates simulated holdings into cash and records SELL trades.
+
+The initial balance is zero until you add funds.
+
+## Optional GitHub Actions
+
+GitHub Actions still runs every 30 minutes if enabled. It is now only a scheduled analysis job that can update generated JSON files.
+
+It is not the production site deployment path. Render serves the live app.
 
 ## Trading Skill Pack
 
-Put Markdown strategy notes in `skills/`. Every LLM analysis run loads those files and passes them as trading skill context.
+Put Markdown strategy notes in `skills/`. AI analysis loads these files and uses them as trading-skill context.
 
-Use this for your own screening rules, risk preferences, market-regime filters, and position-sizing playbooks.
-
-## Paper Trading Logic
-
-The simulator replays recent daily history and trades only inside the paper portfolio.
-
-Buy logic favors:
-
-- Price above SMA20
-- SMA20 above SMA60
-- RSI in a healthy momentum range
-- Positive daily return
-- Expanding volume
-
-Sell logic includes:
-
-- Stop loss
-- Take profit
-- Price breaking below SMA20
-- Overbought reversal risk
-
-This is a simulation for analysis and iteration. It does not place real trades and cannot guarantee returns.
-
-## Backtesting
-
-The dashboard has one AI Backtest page where you can choose start date, end date, trading style, and initial capital. It calls the FastAPI backend at `/api/backtests`. If the backend is not running, the page shows an error instead of silently falling back to a fake local calculation.
-
-When FastAPI is running, the page sends your choices directly to the backend, so you do not need to edit GitHub Variables for each experiment.
-
-The scheduled GitHub Actions backend can still run a formal default backtest using repository variables such as `BACKTEST_START_DATE`, `BACKTEST_END_DATE`, `BACKTEST_STYLE`, and `BACKTEST_INITIAL_CAPITAL`. With `AI_BACKTEST_ENABLED=true`, each trading day calls DeepSeek with only data available up to that day, applies the returned simulated orders, then calls OpenAI once at the end for a compressed high-quality review. That output is saved to `docs/data/backtest_latest.json` and included in `docs/data/latest.json`.
-
-If `BACKTEST_START_DATE` and `BACKTEST_END_DATE` are empty, the scheduled run uses a rolling window ending today. Control the length with `BACKTEST_LOOKBACK_DAYS`.
-
-The dashboard Automation panel shows the configured GitHub Actions cron, trigger type, run id, and run link when available. Scheduled AI Backtest also shows simulated buy/sell orders and the daily DeepSeek decision log.
-
-## Local Database
-
-The interactive backend uses SQLite at `data/stock_dashboard.sqlite3`.
-
-It stores:
-
-- Backtest requests and results
-- Deposit and withdrawal records
-- Review ledger rows
-
-This is the recommended mode when you want the frontend controls to actually change backend state.
-
-## Review Ledger
-
-Each scheduled run writes a daily review entry to `docs/data/ledger.json`. The dashboard Review Ledger page renders those entries as a calendar-style view so you can revisit prior decisions and results.
-
-## GitHub Pages
-
-The workflow deploys the generated `/docs` folder to GitHub Pages through the official Pages artifact flow.
-
-In the repository settings, enable GitHub Pages with GitHub Actions as the source.
-
-## Output Shape
-
-`docs/data/latest.json` contains:
-
-```json
-{
-  "generated_at": "2026-05-22T00:00:00+00:00",
-  "symbols": ["AAPL", "NVDA"],
-  "stocks": [
-    {
-      "symbol": "AAPL",
-      "company_name": "Apple Inc.",
-      "indicators": {
-        "price": 123.45,
-        "sma20": 120.12,
-        "sma60": 118.34,
-        "rsi14": 54.2,
-        "daily_return_pct": 1.25,
-        "volume": 12345678,
-        "volume_change_pct": 8.8
-      },
-      "rule_based": {
-        "rating": "bullish",
-        "confidence": "medium",
-        "summary": "Price is above SMA20; SMA20 is above SMA60"
-      }
-    }
-  ],
-  "portfolio": {
-    "mode": "paper_trading",
-    "cash": 0,
-    "balance": 0,
-    "total_return_pct": 0,
-    "holdings": [],
-    "trade_history": [],
-    "cash_movements": [],
-    "equity_curve": []
-  },
-  "llm_analysis": {},
-  "disclaimer": "Analysis and alerts only. No automatic trading."
-}
-```
+Use this for your own screening rules, risk limits, position sizing, market-regime filters, and review checklists.
