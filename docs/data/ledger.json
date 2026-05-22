@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-05-22T04:35:50.641519+00:00",
+  "generated_at": "2026-05-22T05:06:13.791086+00:00",
   "entries": [
     {
       "date": "2026-05-22",
@@ -7,9 +7,9 @@
       "title": "Daily Review",
       "portfolio_balance": 0,
       "portfolio_return_pct": 0,
-      "backtest_return_pct": 41.69,
+      "backtest_return_pct": 16.26,
       "holdings": [],
-      "review": "The market shows mixed signals with strong bullish momentum in select small-cap stocks exhibiting high volume and positive price action, while several large-cap names remain in bearish trends or overbought conditions. Cautious optimism is warranted, focusing on quality momentum setups with disciplined risk management."
+      "review": "The market exhibits mixed signals with strong bullish momentum in several small-cap stocks accompanied by high volume surges, while many large-cap technology stocks show signs of downtrends or overbought conditions. Caution is warranted due to potential pullbacks in overbought names and the risk of prolonged weakness in oversold stocks. Maintaining a balanced approach with disciplined risk controls is advisable."
     }
   ]
 }
