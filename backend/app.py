@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sys
 from copy import deepcopy
 from datetime import UTC, datetime, timedelta
@@ -98,6 +99,12 @@ class ReviewRequest(BaseModel):
     focus: str | None = None
 
 
+class AnalysisPlanReviewRequest(BaseModel):
+    plan_date: str
+    plan_text: str
+    horizons: list[Literal["next_trading_day", "one_week", "one_month"]] = Field(min_length=1)
+
+
 @app.get("/", include_in_schema=False)
 def index() -> FileResponse:
     if not INDEX_PATH.exists():
@@ -173,6 +180,7 @@ def run_manual_analysis(request: AnalysisRequest) -> dict[str, Any]:
         if successful_stocks
         else {}
     )
+    llm_analysis = _ensure_action_plan(llm_analysis, successful_stocks, portfolio, analysis_request)
     entry = {
         "id": _log_id(),
         "created_at": _now(),
@@ -271,6 +279,23 @@ def review_period(request: ReviewRequest) -> dict[str, Any]:
 @app.get("/api/review/log")
 def review_log() -> dict[str, Any]:
     return _read_json(REVIEW_LOG_PATH, {"entries": []})
+
+
+@app.post("/api/review/analysis-plan")
+def review_analysis_plan(request: AnalysisPlanReviewRequest) -> dict[str, Any]:
+    symbols = _extract_symbols_from_plan(request.plan_text)
+    if not symbols:
+        raise HTTPException(status_code=400, detail="No ticker symbols found in the pasted plan.")
+    entry = {
+        "id": _log_id(),
+        "created_at": _now(),
+        "plan_date": request.plan_date,
+        "horizons": request.horizons,
+        "symbols": symbols,
+        "results": _analysis_plan_results(request.plan_date, symbols, request.horizons),
+    }
+    log = _append_log(REVIEW_LOG_PATH, {"type": "analysis_plan_review", **entry})
+    return {"entry": entry, "review_log": log}
 
 
 @app.post("/api/paper/add-funds")
@@ -594,6 +619,184 @@ def _uploaded_holding(row: HoldingInput, uploaded_at: str) -> dict[str, Any]:
         "opened_at": uploaded_at,
         "source": "uploaded_current_holding",
     }
+
+
+def _ensure_action_plan(
+    llm_analysis: dict[str, Any],
+    stocks: list[dict[str, Any]],
+    portfolio: dict[str, Any],
+    analysis_request: dict[str, Any],
+) -> dict[str, Any]:
+    premium = llm_analysis.setdefault("openai_premium", {})
+    if not isinstance(premium, dict):
+        premium = {}
+        llm_analysis["openai_premium"] = premium
+    if premium.get("action_plan"):
+        premium["action_plan"] = _normalize_action_plan(premium["action_plan"])
+        return llm_analysis
+    ranked = sorted(
+        [row for row in stocks if not row.get("error")],
+        key=lambda row: _stock_score(row),
+        reverse=True,
+    )
+    holdings = portfolio.get("holdings", [])
+    cash_note = _cash_note(analysis_request)
+    premium.setdefault("market_view", "Generated from rule scores because no structured OpenAI action plan was available.")
+    premium["action_plan"] = {
+        "conservative": {
+            "summary": "Lower-risk paper plan using the strongest, less-overheated candidates.",
+            "buys": [_suggestion(row, "BUY", "30-50% of available/additional cash split across top names") for row in ranked[:3]],
+            "sells": [],
+            "cash_note": cash_note,
+        },
+        "aggressive": {
+            "summary": "Higher-risk paper plan using stronger momentum and volatility candidates.",
+            "buys": [_suggestion(row, "BUY", "20-35% of available/additional cash per high-conviction name") for row in ranked[:5]],
+            "sells": [],
+            "cash_note": cash_note,
+        },
+        "steady": {
+            "summary": "Balanced paper plan: add gradually and avoid oversized single-stock exposure.",
+            "buys": [_suggestion(row, "BUY", "Equal-weight allocation across selected names") for row in ranked[:4]],
+            "sells": [],
+            "cash_note": cash_note,
+        },
+        "current_holding_actions": [_holding_action(row) for row in holdings],
+    }
+    return llm_analysis
+
+
+def _normalize_action_plan(plan: dict[str, Any]) -> dict[str, Any]:
+    if "aggressive" not in plan and "fund" in plan:
+        plan["aggressive"] = plan["fund"]
+    plan.setdefault("conservative", {"summary": "", "buys": [], "sells": [], "cash_note": ""})
+    plan.setdefault("aggressive", {"summary": "", "buys": [], "sells": [], "cash_note": ""})
+    plan.setdefault("steady", {"summary": "", "buys": [], "sells": [], "cash_note": ""})
+    plan.setdefault("current_holding_actions", [])
+    return plan
+
+
+def _stock_score(row: dict[str, Any]) -> int:
+    indicators = row.get("indicators", {})
+    score = 0
+    for left, right in (("price", "sma20"), ("sma20", "sma60")):
+        if isinstance(indicators.get(left), (int, float)) and isinstance(indicators.get(right), (int, float)) and indicators[left] > indicators[right]:
+            score += 1
+    rsi = indicators.get("rsi14")
+    if isinstance(rsi, (int, float)) and 40 <= rsi <= 72:
+        score += 1
+    if isinstance(indicators.get("daily_return_pct"), (int, float)) and indicators["daily_return_pct"] > 0:
+        score += 1
+    if isinstance(indicators.get("volume_change_pct"), (int, float)) and indicators["volume_change_pct"] > 8:
+        score += 1
+    return score
+
+
+def _suggestion(row: dict[str, Any], action: str, amount: str) -> dict[str, str]:
+    indicators = row.get("indicators", {})
+    price = indicators.get("price")
+    return {
+        "symbol": str(row.get("symbol") or ""),
+        "company_name": str(row.get("company_name") or ""),
+        "action": action,
+        "amount": amount,
+        "quantity": "Calculate from your available cash and broker lot size.",
+        "target_price": f"{round(price, 2)} or better" if isinstance(price, (int, float)) else "market/limit price needed",
+        "reason": row.get("rule_based", {}).get("summary") or "High rule score among current candidates.",
+    }
+
+
+def _holding_action(row: dict[str, Any]) -> dict[str, str]:
+    unrealized = float(row.get("unrealized_return_pct") or 0)
+    if unrealized <= -8:
+        action = "Consider trimming or selling part of this paper position"
+        qty = "25-50%"
+    elif unrealized >= 15:
+        action = "Consider taking partial profit"
+        qty = "20-33%"
+    else:
+        action = "Hold and monitor"
+        qty = "0%"
+    return {
+        "symbol": str(row.get("symbol") or ""),
+        "company_name": str(row.get("company_name") or ""),
+        "current_position": f"{row.get('shares', 0)} shares, value {row.get('market_value', 0)}",
+        "recommended_action": action,
+        "quantity_or_percent": qty,
+        "trigger_or_limit_price": str(row.get("current_price") or "refresh price first"),
+        "reason": f"Current unrealized return is {round(unrealized, 2)}%.",
+    }
+
+
+def _cash_note(request: dict[str, Any]) -> str:
+    intent = request.get("cash_intent", "none")
+    amount = request.get("cash_amount", 0)
+    currency = request.get("cash_currency", "SGD")
+    if intent == "add" and amount:
+        return f"Allocate the additional {amount} {currency}; do not assume existing cash must be used."
+    if intent == "withdraw" and amount:
+        return f"Raise approximately {amount} {currency} by trimming lower-conviction holdings first."
+    return "No cash change requested; use current portfolio state only."
+
+
+def _extract_symbols_from_plan(plan_text: str) -> list[str]:
+    blocked = {"BUY", "SELL", "HOLD", "ETF", "SGD", "USD", "HKD", "RMB", "AI"}
+    matches = re.findall(r"\b[A-Z0-9]{1,5}(?:\.[A-Z]{1,3})?\b", plan_text.upper())
+    symbols = []
+    for match in matches:
+        if match in blocked or match.isdigit() or match in symbols:
+            continue
+        symbols.append(match)
+    return symbols[:20]
+
+
+def _analysis_plan_results(plan_date: str, symbols: list[str], horizons: list[str]) -> list[dict[str, Any]]:
+    today = datetime.now(UTC).date()
+    parsed_plan_date = datetime.fromisoformat(plan_date).date()
+    results = []
+    for horizon in horizons:
+        target_date = _target_horizon_date(parsed_plan_date, horizon)
+        if target_date > today:
+            results.append({"horizon": horizon, "target_date": target_date.isoformat(), "status": "not_applicable_yet", "rows": []})
+            continue
+        rows = [_symbol_plan_result(symbol, parsed_plan_date, target_date) for symbol in symbols]
+        results.append({"horizon": horizon, "target_date": target_date.isoformat(), "status": "ok", "rows": rows})
+    return results
+
+
+def _target_horizon_date(plan_date: datetime.date, horizon: str) -> datetime.date:
+    if horizon == "next_trading_day":
+        return plan_date + timedelta(days=1)
+    if horizon == "one_week":
+        return plan_date + timedelta(days=7)
+    return plan_date + timedelta(days=30)
+
+
+def _symbol_plan_result(symbol: str, plan_date: datetime.date, target_date: datetime.date) -> dict[str, Any]:
+    start = (plan_date - timedelta(days=5)).isoformat()
+    end = (target_date + timedelta(days=7)).isoformat()
+    try:
+        history = yf.Ticker(symbol).history(start=start, end=end, interval="1d", auto_adjust=False)
+        if history.empty:
+            return {"symbol": symbol, "status": "no_data"}
+        history.index = history.index.tz_localize(None)
+        plan_rows = history[history.index.date >= plan_date]
+        target_rows = history[history.index.date >= target_date]
+        if plan_rows.empty or target_rows.empty:
+            return {"symbol": symbol, "status": "not_enough_market_data"}
+        plan_close = float(plan_rows.iloc[0]["Close"])
+        target_close = float(target_rows.iloc[0]["Close"])
+        return {
+            "symbol": symbol,
+            "status": "ok",
+            "plan_trade_date": plan_rows.index[0].date().isoformat(),
+            "target_trade_date": target_rows.index[0].date().isoformat(),
+            "plan_close": round(plan_close, 4),
+            "target_close": round(target_close, 4),
+            "return_pct": round(((target_close / plan_close) - 1) * 100, 2) if plan_close else 0,
+        }
+    except Exception as exc:
+        return {"symbol": symbol, "status": "error", "error": str(exc)}
 
 
 def _period_review(request: ReviewRequest, dashboard_data: dict[str, Any]) -> dict[str, Any]:

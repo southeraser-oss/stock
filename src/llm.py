@@ -188,7 +188,7 @@ def _premium_context(
         "analysis_request": analysis_request,
         "trading_skills": skills or "No custom trading skills provided.",
         "task": (
-            "Return a beginner-friendly paper-trading action plan. Include three strategies: conservative, fund, steady. "
+            "Return a beginner-friendly paper-trading action plan. Include three strategies: conservative, aggressive, steady. "
             "For each strategy, say exactly what to buy, approximate amount or percent, and why. "
             "For current holdings, say what to keep, trim, or sell, including quantity or percent and suggested trigger/limit price if possible. "
             "If the user wants to add cash, allocate that new cash. If the user wants to withdraw cash, recommend what to sell to fund the withdrawal."
@@ -262,14 +262,14 @@ def _openai_response_schema() -> dict[str, Any]:
                     "additionalProperties": False,
                     "properties": {
                         "conservative": {"$ref": "#/$defs/strategy_plan"},
-                        "fund": {"$ref": "#/$defs/strategy_plan"},
+                        "aggressive": {"$ref": "#/$defs/strategy_plan"},
                         "steady": {"$ref": "#/$defs/strategy_plan"},
                         "current_holding_actions": {
                             "type": "array",
                             "items": {"$ref": "#/$defs/holding_action"},
                         },
                     },
-                    "required": ["conservative", "fund", "steady", "current_holding_actions"],
+                    "required": ["conservative", "aggressive", "steady", "current_holding_actions"],
                 },
             },
             "$defs": {

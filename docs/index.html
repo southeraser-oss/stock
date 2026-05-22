@@ -96,6 +96,7 @@
     .style-note-item strong { display: block; margin-bottom: 4px; }
     .action-plan { display: grid; gap: 12px; }
     .action-section { border-top: 1px solid var(--line); padding-top: 12px; }
+    .tag-button[aria-pressed="true"] { border-color: var(--ink); background: var(--ink); color: #fff; }
     .stock-card { min-height: 168px; }
     .symbol { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
     .symbol strong { font-size: 20px; }
@@ -249,6 +250,22 @@
         <div id="reviewResult" class="status"></div>
       </article>
       <article class="panel">
+        <h2>Review Analysis Plan</h2>
+        <div class="form-grid">
+          <label class="status">Plan date<input id="planReviewDate" type="date"></label>
+          <label class="status">Plan text<textarea id="planReviewText" placeholder="Paste exported AI Action Plan Markdown or text here"></textarea></label>
+          <div>
+            <div class="control-row" id="planReviewHorizons">
+              <button type="button" class="tag-button" data-horizon="next_trading_day" aria-pressed="true">Next trading day</button>
+              <button type="button" class="tag-button" data-horizon="one_week" aria-pressed="false">One week</button>
+              <button type="button" class="tag-button" data-horizon="one_month" aria-pressed="false">One month</button>
+            </div>
+            <button type="button" id="runPlanReview" class="primary-action">Review Analysis Plan</button>
+          </div>
+        </div>
+        <div id="planReviewResult" class="status"></div>
+      </article>
+      <article class="panel">
         <h2>Review Log</h2>
         <div id="reviewLog"></div>
       </article>
@@ -328,6 +345,11 @@
     const runReview = document.querySelector("#runReview");
     const reviewResult = document.querySelector("#reviewResult");
     const reviewLog = document.querySelector("#reviewLog");
+    const planReviewDate = document.querySelector("#planReviewDate");
+    const planReviewText = document.querySelector("#planReviewText");
+    const planReviewHorizons = document.querySelector("#planReviewHorizons");
+    const runPlanReview = document.querySelector("#runPlanReview");
+    const planReviewResult = document.querySelector("#planReviewResult");
     const ledgerCalendar = document.querySelector("#ledgerCalendar");
     const controlStatus = document.querySelector("#controlStatus");
     const holdingsTable = document.querySelector("#holdingsTable");
@@ -394,7 +416,7 @@
       renderAnalysisLog(data.analysis_log || {});
       renderReviewLog(data.review_log || {});
       renderActionPlan(data.llm_analysis || {});
-      cards.innerHTML = (data.stocks || []).map(renderCard).join("");
+      cards.innerHTML = (data.stocks || []).slice(0, 10).map(renderCard).join("");
     }
 
     function renderAutomation(automation) {
@@ -446,9 +468,10 @@
 
     function renderLogPlanSummary(plan) {
       if (!plan) return `<div class="empty">No structured action plan saved for this entry.</div>`;
+      const aggressive = plan.aggressive || plan.fund;
       return `
         <div class="line"><span>Conservative</span><strong>${plan.conservative?.summary || "n/a"}</strong></div>
-        <div class="line"><span>Fund / ETF</span><strong>${plan.fund?.summary || "n/a"}</strong></div>
+        <div class="line"><span>Aggressive</span><strong>${aggressive?.summary || "n/a"}</strong></div>
         <div class="line"><span>Steady</span><strong>${plan.steady?.summary || "n/a"}</strong></div>
       `;
     }
@@ -459,10 +482,11 @@
         actionPlan.innerHTML = `<div class="empty">Run AI Analysis to generate concrete buy/sell action plans.</div>`;
         return;
       }
+      const aggressive = plan.aggressive || plan.fund;
       actionPlan.innerHTML = `
         <div class="line"><span>Market view</span><strong>${analysis.openai_premium?.market_view || "n/a"}</strong></div>
         ${renderStrategyPlan("Conservative", plan.conservative)}
-        ${renderStrategyPlan("Fund / ETF", plan.fund)}
+        ${renderStrategyPlan("Aggressive", aggressive)}
         ${renderStrategyPlan("Steady", plan.steady)}
         <div class="action-section">
           <h2>Current Holding Actions</h2>
@@ -522,11 +546,54 @@
       }
       reviewLog.innerHTML = entries.slice(0, 20).map(entry => `
         <article class="panel">
-          <strong>${entry.start_date} to ${entry.end_date}</strong>
-          <p class="status">${entry.focus || "Period review"} | Trades: ${entry.trade_count || 0} | Analyses: ${entry.analysis_count || 0}</p>
-          <pre>${JSON.stringify(entry.review || {}, null, 2)}</pre>
+          ${entry.type === "analysis_plan_review" ? `
+            <strong>Plan review: ${entry.plan_date}</strong>
+            <p class="status">Horizons: ${(entry.horizons || []).map(horizonLabel).join(", ")}</p>
+            ${renderPlanReviewResult(entry)}
+          ` : `
+            <strong>${entry.start_date} to ${entry.end_date}</strong>
+            <p class="status">${entry.focus || "Period review"} | Trades: ${entry.trade_count || 0} | Analyses: ${entry.analysis_count || 0}</p>
+            <pre>${JSON.stringify(entry.review || {}, null, 2)}</pre>
+          `}
         </article>
       `).join("");
+    }
+
+    function renderPlanReviewResult(entry) {
+      return `
+        <div class="line"><span>Plan date</span><strong>${entry.plan_date}</strong></div>
+        <div class="line"><span>Detected symbols</span><strong>${(entry.symbols || []).join(", ") || "n/a"}</strong></div>
+        ${(entry.results || []).map(result => `
+          <div class="action-section">
+            <h2>${horizonLabel(result.horizon)} - ${result.target_date}</h2>
+            ${result.status === "not_applicable_yet"
+              ? `<p class="error">Not applicable yet. The target date has not arrived.</p>`
+              : renderPlanResultRows(result.rows || [])}
+          </div>
+        `).join("")}
+      `;
+    }
+
+    function renderPlanResultRows(rows) {
+      if (!rows.length) return `<div class="empty">No result rows.</div>`;
+      return `<table><thead><tr><th>Symbol</th><th>Status</th><th>Plan close</th><th>Target close</th><th>Return</th><th>Dates</th></tr></thead><tbody>${rows.map(row => `
+        <tr>
+          <td><strong>${row.symbol}</strong></td>
+          <td>${row.status}</td>
+          <td>${row.plan_close === undefined ? "-" : money(row.plan_close)}</td>
+          <td>${row.target_close === undefined ? "-" : money(row.target_close)}</td>
+          <td class="${row.return_pct === undefined ? "" : signedClass(row.return_pct)}">${row.return_pct === undefined ? "-" : num(row.return_pct, "%")}</td>
+          <td>${row.plan_trade_date || ""} -> ${row.target_trade_date || ""}</td>
+        </tr>
+      `).join("")}</tbody></table>`;
+    }
+
+    function horizonLabel(horizon) {
+      return {
+        next_trading_day: "Next trading day",
+        one_week: "One week",
+        one_month: "One month",
+      }[horizon] || horizon;
     }
 
     function renderStrategy(portfolio) {
@@ -745,6 +812,11 @@
       const markdown = buildAnalysisLogMarkdown(latestData?.analysis_log || {}, days);
       downloadMarkdown(`analysis-log-${days}d-${new Date().toISOString().slice(0, 10)}.md`, markdown);
     });
+    planReviewHorizons.querySelectorAll(".tag-button").forEach(button => {
+      button.addEventListener("click", () => {
+        button.setAttribute("aria-pressed", button.getAttribute("aria-pressed") === "true" ? "false" : "true");
+      });
+    });
     runAnalysis.addEventListener("click", async () => {
       try {
         analysisStatus.textContent = "Running AI analysis...";
@@ -784,6 +856,27 @@
         if (logResponse.ok) renderReviewLog(await logResponse.json());
       } catch (error) {
         reviewResult.innerHTML = `<span class="error">${error.message}</span>`;
+      }
+    });
+    runPlanReview.addEventListener("click", async () => {
+      try {
+        const horizons = [...planReviewHorizons.querySelectorAll('.tag-button[aria-pressed="true"]')].map(button => button.dataset.horizon);
+        if (!planReviewDate.value) throw new Error("Choose the plan date.");
+        if (!planReviewText.value.trim()) throw new Error("Paste the analysis action plan text.");
+        if (!horizons.length) throw new Error("Choose at least one review horizon.");
+        planReviewResult.textContent = "Reviewing plan outcomes...";
+        const response = await fetch("/api/review/analysis-plan", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ plan_date: planReviewDate.value, plan_text: planReviewText.value, horizons }),
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(payload.detail || `Backend returned ${response.status}`);
+        planReviewResult.innerHTML = renderPlanReviewResult(payload.entry);
+        const logResponse = await fetch(`/api/review/log?ts=${Date.now()}`);
+        if (logResponse.ok) renderReviewLog(await logResponse.json());
+      } catch (error) {
+        planReviewResult.innerHTML = `<span class="error">${error.message}</span>`;
       }
     });
     runBacktest.addEventListener("click", async () => {
@@ -856,7 +949,7 @@
         "",
       ];
       appendPlanMarkdown(lines, "Conservative", plan.conservative);
-      appendPlanMarkdown(lines, "Fund / ETF", plan.fund);
+      appendPlanMarkdown(lines, "Aggressive", plan.aggressive || plan.fund);
       appendPlanMarkdown(lines, "Steady", plan.steady);
       lines.push("## Current Holding Actions", "");
       (plan.current_holding_actions || []).forEach(row => {
@@ -889,7 +982,7 @@
         lines.push(`OpenAI: ${entry.llm_analysis?.provider_status?.openai || "n/a"}`);
         lines.push(`Market view: ${entry.llm_analysis?.openai_premium?.market_view || entry.llm_analysis?.deepseek?.market_view || "n/a"}`, "");
         appendPlanMarkdown(lines, "Conservative", entry.llm_analysis?.openai_premium?.action_plan?.conservative);
-        appendPlanMarkdown(lines, "Fund / ETF", entry.llm_analysis?.openai_premium?.action_plan?.fund);
+        appendPlanMarkdown(lines, "Aggressive", entry.llm_analysis?.openai_premium?.action_plan?.aggressive || entry.llm_analysis?.openai_premium?.action_plan?.fund);
         appendPlanMarkdown(lines, "Steady", entry.llm_analysis?.openai_premium?.action_plan?.steady);
       });
       if (!entries.length) lines.push("No analysis entries in the selected range.");
@@ -974,6 +1067,9 @@
         reviewStartDate.setDate(reviewStartDate.getDate() - 30);
         reviewEnd.value = reviewEndDate.toISOString().slice(0, 10);
         reviewStart.value = reviewStartDate.toISOString().slice(0, 10);
+      }
+      if (planReviewDate && !planReviewDate.value) {
+        planReviewDate.value = new Date().toISOString().slice(0, 10);
       }
       if (btStart.value || btEnd.value) return;
       const dates = Object.values(latestData?.history?.history || {}).flat().map(row => row.date).filter(Boolean).sort();
