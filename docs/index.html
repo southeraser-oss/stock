@@ -94,6 +94,8 @@
     .style-note-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 10px; }
     .style-note-item { border-top: 1px solid var(--line); padding-top: 10px; }
     .style-note-item strong { display: block; margin-bottom: 4px; }
+    .action-plan { display: grid; gap: 12px; }
+    .action-section { border-top: 1px solid var(--line); padding-top: 12px; }
     .stock-card { min-height: 168px; }
     .symbol { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
     .symbol strong { font-size: 20px; }
@@ -252,21 +254,28 @@
     </section>
 
     <section id="analysis" class="view" hidden>
-      <div class="layout">
-        <article class="panel">
-          <h2>Watchlist Signals</h2>
-          <div class="control-row">
-            <button type="button" id="runAnalysis" class="primary-action">Run AI Analysis</button>
-            <input id="analysisNote" type="text" placeholder="Optional note">
-          </div>
-          <p class="status" id="analysisStatus"></p>
-          <div class="grid" id="cards"></div>
-        </article>
-        <article class="panel">
-          <h2>LLM Review</h2>
-          <pre id="llm">No LLM analysis loaded.</pre>
-        </article>
-      </div>
+      <article class="panel">
+        <h2>AI Action Plan</h2>
+        <div class="form-grid">
+          <label class="status">Today I want to
+            <select id="cashIntent">
+              <option value="none">No cash change</option>
+              <option value="add">Add investment</option>
+              <option value="withdraw">Withdraw cash</option>
+            </select>
+          </label>
+          <label class="status">Amount<input id="cashAmount" type="number" min="0" step="50" value="0"></label>
+          <label class="status">Currency<input id="cashCurrency" type="text" value="SGD"></label>
+          <label class="status">Notes<input id="analysisNote" type="text" placeholder="Optional note"></label>
+          <button type="button" id="runAnalysis" class="primary-action">Run AI Analysis</button>
+        </div>
+        <p class="status" id="analysisStatus"></p>
+        <div class="action-plan" id="actionPlan"></div>
+      </article>
+      <article class="panel">
+        <h2>Watchlist Signals</h2>
+        <div class="grid" id="cards"></div>
+      </article>
       <article class="panel">
         <h2>Analysis Log</h2>
         <div id="analysisLog"></div>
@@ -278,7 +287,6 @@
     const statusEl = document.querySelector("#status");
     const summaryEl = document.querySelector("#summary");
     const cards = document.querySelector("#cards");
-    const llmEl = document.querySelector("#llm");
     const refresh = document.querySelector("#refresh");
     const fundAmount = document.querySelector("#fundAmount");
     const addFunds = document.querySelector("#addFunds");
@@ -291,8 +299,12 @@
     const holdingsUploadStatus = document.querySelector("#holdingsUploadStatus");
     const runAnalysis = document.querySelector("#runAnalysis");
     const analysisNote = document.querySelector("#analysisNote");
+    const cashIntent = document.querySelector("#cashIntent");
+    const cashAmount = document.querySelector("#cashAmount");
+    const cashCurrency = document.querySelector("#cashCurrency");
     const analysisStatus = document.querySelector("#analysisStatus");
     const analysisLog = document.querySelector("#analysisLog");
+    const actionPlan = document.querySelector("#actionPlan");
     const runBacktest = document.querySelector("#runBacktest");
     const btStart = document.querySelector("#btStart");
     const btEnd = document.querySelector("#btEnd");
@@ -370,8 +382,8 @@
       renderLedger(data.ledger || {});
       renderAnalysisLog(data.analysis_log || {});
       renderReviewLog(data.review_log || {});
+      renderActionPlan(data.llm_analysis || {});
       cards.innerHTML = (data.stocks || []).map(renderCard).join("");
-      llmEl.textContent = JSON.stringify(data.llm_analysis || {}, null, 2);
     }
 
     function renderAutomation(automation) {
@@ -415,9 +427,80 @@
           <div class="line"><span>Symbols</span><strong>${(entry.symbols || []).slice(0, 8).join(", ") || "n/a"}</strong></div>
           <div class="line"><span>DeepSeek</span><strong>${entry.llm_analysis?.provider_status?.deepseek || "n/a"}</strong></div>
           <div class="line"><span>OpenAI</span><strong>${entry.llm_analysis?.provider_status?.openai || "n/a"}</strong></div>
-          <pre>${JSON.stringify(entry.llm_analysis || {}, null, 2)}</pre>
+          <div class="line"><span>Market view</span><strong>${entry.llm_analysis?.openai_premium?.market_view || entry.llm_analysis?.deepseek?.market_view || "n/a"}</strong></div>
+          ${renderLogPlanSummary(entry.llm_analysis?.openai_premium?.action_plan)}
         </article>
       `).join("");
+    }
+
+    function renderLogPlanSummary(plan) {
+      if (!plan) return `<div class="empty">No structured action plan saved for this entry.</div>`;
+      return `
+        <div class="line"><span>Conservative</span><strong>${plan.conservative?.summary || "n/a"}</strong></div>
+        <div class="line"><span>Fund / ETF</span><strong>${plan.fund?.summary || "n/a"}</strong></div>
+        <div class="line"><span>Steady</span><strong>${plan.steady?.summary || "n/a"}</strong></div>
+      `;
+    }
+
+    function renderActionPlan(analysis) {
+      const plan = analysis.openai_premium?.action_plan;
+      if (!plan) {
+        actionPlan.innerHTML = `<div class="empty">Run AI Analysis to generate concrete buy/sell action plans.</div>`;
+        return;
+      }
+      actionPlan.innerHTML = `
+        <div class="line"><span>Market view</span><strong>${analysis.openai_premium?.market_view || "n/a"}</strong></div>
+        ${renderStrategyPlan("Conservative", plan.conservative)}
+        ${renderStrategyPlan("Fund / ETF", plan.fund)}
+        ${renderStrategyPlan("Steady", plan.steady)}
+        <div class="action-section">
+          <h2>Current Holding Actions</h2>
+          ${renderHoldingActions(plan.current_holding_actions || [])}
+        </div>
+      `;
+    }
+
+    function renderStrategyPlan(title, plan) {
+      if (!plan) return "";
+      return `
+        <div class="action-section">
+          <h2>${title}</h2>
+          <p class="status">${plan.summary || ""}</p>
+          <div class="line"><span>Cash note</span><strong>${plan.cash_note || "n/a"}</strong></div>
+          <h2>Buy</h2>
+          ${renderSuggestions(plan.buys || [])}
+          <h2>Sell</h2>
+          ${renderSuggestions(plan.sells || [])}
+        </div>
+      `;
+    }
+
+    function renderSuggestions(rows) {
+      if (!rows.length) return `<div class="empty">No action suggested.</div>`;
+      return `<table><thead><tr><th>Symbol</th><th>Action</th><th>Amount</th><th>Qty</th><th>Price</th><th>Reason</th></tr></thead><tbody>${rows.map(row => `
+        <tr>
+          <td><strong>${row.symbol}</strong><br><span class="status">${row.company_name || ""}</span></td>
+          <td>${row.action}</td>
+          <td>${row.amount}</td>
+          <td>${row.quantity}</td>
+          <td>${row.target_price}</td>
+          <td>${row.reason}</td>
+        </tr>
+      `).join("")}</tbody></table>`;
+    }
+
+    function renderHoldingActions(rows) {
+      if (!rows.length) return `<div class="empty">No current holding action suggested.</div>`;
+      return `<table><thead><tr><th>Symbol</th><th>Current</th><th>Action</th><th>Qty/%</th><th>Price</th><th>Reason</th></tr></thead><tbody>${rows.map(row => `
+        <tr>
+          <td><strong>${row.symbol}</strong><br><span class="status">${row.company_name || ""}</span></td>
+          <td>${row.current_position}</td>
+          <td>${row.recommended_action}</td>
+          <td>${row.quantity_or_percent}</td>
+          <td>${row.trigger_or_limit_price}</td>
+          <td>${row.reason}</td>
+        </tr>
+      `).join("")}</tbody></table>`;
     }
 
     function renderReviewLog(log) {
@@ -548,7 +631,7 @@
       } catch (error) {
         statusEl.innerHTML = `<span class="error">${error.message}</span>`;
         summaryEl.innerHTML = "";
-        llmEl.textContent = "Start the FastAPI app, then refresh this page.";
+        actionPlan.innerHTML = `<div class="empty">Start the FastAPI app, then refresh this page.</div>`;
       }
     }
 
@@ -603,7 +686,13 @@
         const response = await fetch("/api/analysis/run", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ max_symbols: 35, note: analysisNote.value || "" }),
+          body: JSON.stringify({
+            max_symbols: 35,
+            note: analysisNote.value || "",
+            cash_intent: cashIntent.value,
+            cash_amount: Number(cashAmount.value || 0),
+            cash_currency: cashCurrency.value || "SGD",
+          }),
         });
         const payload = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(payload.detail || `Backend returned ${response.status}`);

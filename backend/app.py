@@ -70,6 +70,9 @@ class CashMovementRequest(BaseModel):
 class AnalysisRequest(BaseModel):
     max_symbols: int = Field(default=35, ge=1, le=200)
     note: str | None = None
+    cash_intent: Literal["none", "add", "withdraw"] = "none"
+    cash_amount: float = Field(default=0, ge=0)
+    cash_currency: str = "SGD"
 
 
 class HoldingInput(BaseModel):
@@ -153,11 +156,25 @@ def run_manual_analysis(request: AnalysisRequest) -> dict[str, Any]:
     successful_stocks = [stock for stock in stocks if not stock.get("error")]
     portfolio = _paper_state()
     backtest = _read_json(BACKTEST_PATH, {})
-    llm_analysis = analyze_with_llms(successful_stocks, portfolio, backtest) if successful_stocks else {}
+    analysis_request = {
+        "note": request.note or "",
+        "cash_intent": request.cash_intent,
+        "cash_amount": request.cash_amount,
+        "cash_currency": request.cash_currency,
+    }
+    recent_log = _read_json(ANALYSIS_LOG_PATH, {"entries": []}).get("entries", [])
+    llm_analysis = (
+        analyze_with_llms(successful_stocks, portfolio, backtest, analysis_request, recent_log)
+        if successful_stocks
+        else {}
+    )
     entry = {
         "id": _log_id(),
         "created_at": _now(),
         "note": request.note or "",
+        "cash_intent": request.cash_intent,
+        "cash_amount": request.cash_amount,
+        "cash_currency": request.cash_currency,
         "symbols": [row.get("symbol") for row in successful_stocks],
         "universe": universe,
         "portfolio_snapshot": portfolio,
@@ -448,6 +465,8 @@ def _analyze_symbol(symbol: str, histories: dict[str, Any]) -> dict[str, Any]:
             "company_name": _safe_company_name(ticker),
             "indicators": indicators,
             "rule_based": rule_based_signal(indicators),
+            "analyst_summary": _safe_analyst_summary(ticker),
+            "authority_notes": "Analyst recommendation data is fetched from Yahoo Finance/yfinance when available and used as third-party context, not as a guarantee.",
         }
     except Exception as exc:
         return {"symbol": symbol, "error": str(exc)}
@@ -459,6 +478,30 @@ def _safe_company_name(ticker: yf.Ticker) -> str | None:
         return info.get("shortName") or info.get("longName")
     except Exception:
         return None
+
+
+def _safe_analyst_summary(ticker: yf.Ticker) -> dict[str, Any] | None:
+    summary: dict[str, Any] = {}
+    try:
+        recommendations_summary = ticker.get_recommendations_summary()
+        if recommendations_summary is not None and not recommendations_summary.empty:
+            summary["recommendations_summary"] = recommendations_summary.tail(4).reset_index().to_dict(orient="records")
+    except Exception:
+        pass
+    try:
+        upgrades = ticker.get_upgrades_downgrades()
+        if upgrades is not None and not upgrades.empty:
+            summary["recent_upgrades_downgrades"] = upgrades.tail(5).reset_index().to_dict(orient="records")
+    except Exception:
+        pass
+    try:
+        info = ticker.get_info()
+        for key in ("recommendationMean", "recommendationKey", "targetMeanPrice", "targetMedianPrice", "numberOfAnalystOpinions"):
+            if key in info:
+                summary[key] = info.get(key)
+    except Exception:
+        pass
+    return json.loads(json.dumps(summary, default=str)) if summary else None
 
 
 def _uploaded_holding(row: HoldingInput, uploaded_at: str) -> dict[str, Any]:

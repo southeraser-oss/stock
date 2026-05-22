@@ -13,14 +13,26 @@ def analyze_with_llms(
     stock_rows: list[dict[str, Any]],
     portfolio: dict[str, Any],
     backtest: dict[str, Any] | None = None,
+    analysis_request: dict[str, Any] | None = None,
+    recent_analysis: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Return optional LLM analysis, falling back cleanly when keys are absent."""
     skills = load_trading_skills()
-    deepseek = _call_deepseek(stock_rows, skills)
+    deepseek = _call_deepseek(stock_rows, skills, analysis_request or {})
     premium = None
 
     if _should_call_openai():
-        premium = _call_openai(_premium_context(stock_rows, portfolio, backtest or {}, deepseek, skills))
+        premium = _call_openai(
+            _premium_context(
+                stock_rows,
+                portfolio,
+                backtest or {},
+                deepseek,
+                skills,
+                analysis_request or {},
+                recent_analysis or [],
+            )
+        )
 
     return {
         "division_of_labor": {
@@ -36,7 +48,7 @@ def analyze_with_llms(
     }
 
 
-def _call_deepseek(stock_rows: list[dict[str, Any]], skills: str) -> dict[str, Any] | None:
+def _call_deepseek(stock_rows: list[dict[str, Any]], skills: str, analysis_request: dict[str, Any]) -> dict[str, Any] | None:
     api_key = os.getenv("DEEPSEEK_API_KEY")
     if not api_key:
         return None
@@ -45,7 +57,7 @@ def _call_deepseek(stock_rows: list[dict[str, Any]], skills: str) -> dict[str, A
         "model": os.getenv("MODEL_DEEPSEEK", "deepseek-chat"),
         "messages": [
             {"role": "system", "content": _system_prompt()},
-            {"role": "user", "content": _user_prompt(stock_rows, skills)},
+            {"role": "user", "content": _user_prompt(stock_rows, skills, analysis_request)},
         ],
         "temperature": 0.2,
         "max_tokens": _int_env("DEEPSEEK_MAX_TOKENS", 900),
@@ -100,6 +112,7 @@ def _call_openai(context: dict[str, Any]) -> dict[str, Any] | None:
 def _system_prompt() -> str:
     return (
         "You are a cautious paper-trading stock screening assistant. Analyze technical indicators and provided trading skills. "
+        "Also consider analyst/authority recommendation summaries when present. "
         "Do not recommend automatic trading. Return concise JSON with keys: "
         "market_view, top_watchlist, risks, alerts."
     )
@@ -109,15 +122,18 @@ def _premium_system_prompt() -> str:
     return (
         "You are a senior paper-trading portfolio analyst. Improve the simulated portfolio process, "
         "but do not suggest real-money trading or guaranteed returns. Focus on position quality, "
-        "risk controls, cash use, and next paper-trading alerts. Return strict JSON only."
+        "risk controls, cash use, current holdings, analyst/authority recommendation summaries, recent user operations, "
+        "and the user's stated add/withdraw cash intent. Return strict JSON only with concrete paper-trading action plans."
     )
 
 
-def _user_prompt(stock_rows: list[dict[str, Any]], skills: str) -> str:
+def _user_prompt(stock_rows: list[dict[str, Any]], skills: str, analysis_request: dict[str, Any]) -> str:
     compact = [_compact_stock_row(row) for row in stock_rows]
     return (
         "Trading skills:\n"
         + (skills or "No custom trading skills provided.")
+        + "\n\nUser analysis request:\n"
+        + json.dumps(analysis_request, ensure_ascii=False)
         + "\n\nScreen these compact stock rows for a paper-trading dashboard:\n"
         + json.dumps(compact, ensure_ascii=False)
     )
@@ -129,6 +145,8 @@ def _premium_context(
     backtest: dict[str, Any],
     deepseek: dict[str, Any] | None,
     skills: str,
+    analysis_request: dict[str, Any],
+    recent_analysis: list[dict[str, Any]],
 ) -> dict[str, Any]:
     ranked = sorted(
         [_compact_stock_row(row) for row in stock_rows],
@@ -142,6 +160,7 @@ def _premium_context(
             "total_return_pct": portfolio.get("total_return_pct"),
             "holdings": portfolio.get("holdings", []),
             "recent_trades": portfolio.get("trade_history", [])[-20:],
+            "cash_movements": portfolio.get("cash_movements", [])[-20:],
             "strategy": portfolio.get("strategy", {}),
         },
         "backtest": {
@@ -155,9 +174,25 @@ def _premium_context(
             "daily_reviews": backtest.get("daily_reviews", [])[-10:],
         },
         "top_candidates": ranked[:8],
+        "authority_context": [
+            {
+                "symbol": row.get("symbol"),
+                "company_name": row.get("company_name"),
+                "analyst_summary": row.get("analyst_summary"),
+                "authority_notes": row.get("authority_notes"),
+            }
+            for row in stock_rows[:20]
+        ],
         "deepseek_screen": deepseek,
+        "recent_saved_analysis": recent_analysis[-5:],
+        "analysis_request": analysis_request,
         "trading_skills": skills or "No custom trading skills provided.",
-        "task": "Give premium analysis for the paper-trading simulation and the next monitoring priorities.",
+        "task": (
+            "Return a beginner-friendly paper-trading action plan. Include three strategies: conservative, fund, steady. "
+            "For each strategy, say exactly what to buy, approximate amount or percent, and why. "
+            "For current holdings, say what to keep, trim, or sell, including quantity or percent and suggested trigger/limit price if possible. "
+            "If the user wants to add cash, allocate that new cash. If the user wants to withdraw cash, recommend what to sell to fund the withdrawal."
+        ),
     }
 
 
@@ -175,6 +210,8 @@ def _compact_stock_row(row: dict[str, Any]) -> dict[str, Any]:
         "volume_change_pct": indicators.get("volume_change_pct"),
         "rule_rating": rule_based.get("rating"),
         "rule_summary": rule_based.get("summary"),
+        "analyst_summary": row.get("analyst_summary"),
+        "authority_notes": row.get("authority_notes"),
         "composite_score": _composite_score(indicators),
     }
 
@@ -220,8 +257,77 @@ def _openai_response_schema() -> dict[str, Any]:
                 "risks": {"type": "array", "items": {"type": "string"}},
                 "alerts": {"type": "array", "items": {"type": "string"}},
                 "portfolio_actions": {"type": "array", "items": {"type": "string"}},
+                "action_plan": {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "properties": {
+                        "conservative": {"$ref": "#/$defs/strategy_plan"},
+                        "fund": {"$ref": "#/$defs/strategy_plan"},
+                        "steady": {"$ref": "#/$defs/strategy_plan"},
+                        "current_holding_actions": {
+                            "type": "array",
+                            "items": {"$ref": "#/$defs/holding_action"},
+                        },
+                    },
+                    "required": ["conservative", "fund", "steady", "current_holding_actions"],
+                },
             },
-            "required": ["market_view", "top_watchlist", "risks", "alerts", "portfolio_actions"],
+            "$defs": {
+                "strategy_plan": {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "properties": {
+                        "summary": {"type": "string"},
+                        "buys": {
+                            "type": "array",
+                            "items": {"$ref": "#/$defs/order_suggestion"},
+                        },
+                        "sells": {
+                            "type": "array",
+                            "items": {"$ref": "#/$defs/order_suggestion"},
+                        },
+                        "cash_note": {"type": "string"},
+                    },
+                    "required": ["summary", "buys", "sells", "cash_note"],
+                },
+                "order_suggestion": {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "properties": {
+                        "symbol": {"type": "string"},
+                        "company_name": {"type": "string"},
+                        "action": {"type": "string"},
+                        "amount": {"type": "string"},
+                        "quantity": {"type": "string"},
+                        "target_price": {"type": "string"},
+                        "reason": {"type": "string"},
+                    },
+                    "required": ["symbol", "company_name", "action", "amount", "quantity", "target_price", "reason"],
+                },
+                "holding_action": {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "properties": {
+                        "symbol": {"type": "string"},
+                        "company_name": {"type": "string"},
+                        "current_position": {"type": "string"},
+                        "recommended_action": {"type": "string"},
+                        "quantity_or_percent": {"type": "string"},
+                        "trigger_or_limit_price": {"type": "string"},
+                        "reason": {"type": "string"},
+                    },
+                    "required": [
+                        "symbol",
+                        "company_name",
+                        "current_position",
+                        "recommended_action",
+                        "quantity_or_percent",
+                        "trigger_or_limit_price",
+                        "reason",
+                    ],
+                },
+            },
+            "required": ["market_view", "top_watchlist", "risks", "alerts", "portfolio_actions", "action_plan"],
         },
     }
 
