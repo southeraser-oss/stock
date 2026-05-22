@@ -8,6 +8,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal
 
+import requests
 import yfinance as yf
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
@@ -25,10 +26,14 @@ PAPER_STATE_PATH = DATA_DIR / "paper_state.json"
 BACKTEST_PATH = DATA_DIR / "backtest_latest.json"
 LEDGER_PATH = DATA_DIR / "ledger.json"
 HISTORY_PATH = DATA_DIR / "history.json"
+ANALYSIS_LOG_PATH = DATA_DIR / "analysis_log.json"
+REVIEW_LOG_PATH = DATA_DIR / "review_log.json"
 
 sys.path.insert(0, str(ROOT / "src"))
 
 from backtest import run_backtest  # noqa: E402
+from indicators import calculate_indicators, rule_based_signal  # noqa: E402
+from llm import analyze_with_llms  # noqa: E402
 from universe import load_symbols  # noqa: E402
 from backend.db import cash_movements, init_db, insert_cash_movement, insert_json, latest_backtests  # noqa: E402
 
@@ -62,6 +67,29 @@ class CashMovementRequest(BaseModel):
     note: str | None = None
 
 
+class AnalysisRequest(BaseModel):
+    max_symbols: int = Field(default=35, ge=1, le=200)
+    note: str | None = None
+
+
+class HoldingInput(BaseModel):
+    symbol: str
+    company_name: str | None = None
+    shares: float = Field(gt=0)
+    market_value: float = Field(ge=0)
+
+
+class HoldingsUploadRequest(BaseModel):
+    holdings: list[HoldingInput]
+    note: str | None = None
+
+
+class ReviewRequest(BaseModel):
+    start_date: str
+    end_date: str
+    focus: str | None = None
+
+
 @app.get("/", include_in_schema=False)
 def index() -> FileResponse:
     if not INDEX_PATH.exists():
@@ -84,10 +112,10 @@ def health() -> dict[str, Any]:
         "openai_configured": bool(os.getenv("OPENAI_API_KEY")),
         "database": str(ROOT / "data" / "stock_dashboard.sqlite3"),
         "scheduler": {
-            "github_actions_cron": "*/30 * * * *",
+            "github_actions_cron": None,
             "workflow": ".github/workflows/analyze.yml",
-            "role": "optional scheduled analysis only",
-            "interactive_api": "/api/backtest",
+            "role": "manual analysis by default; workflow_dispatch remains optional",
+            "interactive_api": "/api/analysis/run",
         },
     }
 
@@ -115,6 +143,64 @@ def create_backtest_alias(request: BacktestRequest) -> dict[str, Any]:
 @app.get("/api/backtests")
 def list_backtests() -> dict[str, Any]:
     return {"items": latest_backtests()}
+
+
+@app.post("/api/analysis/run")
+def run_manual_analysis(request: AnalysisRequest) -> dict[str, Any]:
+    symbols, universe = load_symbols()
+    histories: dict[str, Any] = {}
+    stocks = [_analyze_symbol(symbol, histories) for symbol in symbols[: request.max_symbols]]
+    successful_stocks = [stock for stock in stocks if not stock.get("error")]
+    portfolio = _paper_state()
+    backtest = _read_json(BACKTEST_PATH, {})
+    llm_analysis = analyze_with_llms(successful_stocks, portfolio, backtest) if successful_stocks else {}
+    entry = {
+        "id": _log_id(),
+        "created_at": _now(),
+        "note": request.note or "",
+        "symbols": [row.get("symbol") for row in successful_stocks],
+        "universe": universe,
+        "portfolio_snapshot": portfolio,
+        "llm_analysis": llm_analysis,
+    }
+    log = _append_log(ANALYSIS_LOG_PATH, entry)
+    latest = _dashboard_payload()
+    latest["symbols"] = symbols[: request.max_symbols]
+    latest["universe"] = universe
+    latest["stocks"] = stocks
+    latest["llm_analysis"] = llm_analysis
+    latest["analysis_log"] = log
+    latest["generated_at"] = entry["created_at"]
+    _write_json(LATEST_PATH, {k: v for k, v in latest.items() if k not in {"backend", "history"}})
+    return {"entry": entry, "analysis_log": log, "dashboard": _dashboard_payload()}
+
+
+@app.get("/api/analysis/log")
+def analysis_log() -> dict[str, Any]:
+    return _read_json(ANALYSIS_LOG_PATH, {"entries": []})
+
+
+@app.post("/api/portfolio/upload-holdings")
+def upload_holdings(request: HoldingsUploadRequest) -> dict[str, Any]:
+    uploaded_at = _now()
+    state_data = _paper_state()
+    state_data["holdings"] = [_uploaded_holding(row, uploaded_at) for row in request.holdings]
+    state_data["uploaded_holdings_note"] = request.note or ""
+    state_data["updated_at"] = uploaded_at
+    _save_paper_state(_normalize_paper_state(state_data))
+    return {"portfolio": _paper_state(), "dashboard": _dashboard_payload()}
+
+
+@app.post("/api/review")
+def review_period(request: ReviewRequest) -> dict[str, Any]:
+    entry = _period_review(request, _dashboard_payload())
+    log = _append_log(REVIEW_LOG_PATH, entry)
+    return {"entry": entry, "review_log": log}
+
+
+@app.get("/api/review/log")
+def review_log() -> dict[str, Any]:
+    return _read_json(REVIEW_LOG_PATH, {"entries": []})
 
 
 @app.post("/api/paper/add-funds")
@@ -254,6 +340,8 @@ def _dashboard_payload() -> dict[str, Any]:
     payload["backtest"] = _read_json(BACKTEST_PATH, payload.get("backtest") or {})
     payload["ledger"] = _read_json(LEDGER_PATH, payload.get("ledger") or {"entries": []})
     payload["history"] = _read_json(HISTORY_PATH, payload.get("history") or {})
+    payload["analysis_log"] = _read_json(ANALYSIS_LOG_PATH, {"entries": []})
+    payload["review_log"] = _read_json(REVIEW_LOG_PATH, {"entries": []})
     payload["backend"] = health()
     payload.setdefault("generated_at", _now())
     return payload
@@ -321,8 +409,8 @@ def _empty_dashboard() -> dict[str, Any]:
         "llm_analysis": {},
         "automation": {
             "scheduler": "FastAPI dynamic app",
-            "cron": "optional GitHub Actions: */30 * * * *",
-            "interval_minutes": 30,
+            "cron": "manual analysis by button",
+            "interval_minutes": None,
             "event_name": "interactive",
         },
         "portfolio": _default_paper_state(),
@@ -345,6 +433,188 @@ def _fetch_histories(symbols: list[str]) -> dict[str, Any]:
         except Exception:
             continue
     return histories
+
+
+def _analyze_symbol(symbol: str, histories: dict[str, Any]) -> dict[str, Any]:
+    try:
+        ticker = yf.Ticker(symbol)
+        history = ticker.history(period=os.getenv("HISTORY_PERIOD", "2y"), interval="1d", auto_adjust=False)
+        if history.empty:
+            return {"symbol": symbol, "error": "No historical price data returned"}
+        histories[symbol] = history
+        indicators = calculate_indicators(history)
+        return {
+            "symbol": symbol,
+            "company_name": _safe_company_name(ticker),
+            "indicators": indicators,
+            "rule_based": rule_based_signal(indicators),
+        }
+    except Exception as exc:
+        return {"symbol": symbol, "error": str(exc)}
+
+
+def _safe_company_name(ticker: yf.Ticker) -> str | None:
+    try:
+        info = ticker.get_info()
+        return info.get("shortName") or info.get("longName")
+    except Exception:
+        return None
+
+
+def _uploaded_holding(row: HoldingInput, uploaded_at: str) -> dict[str, Any]:
+    market_value = float(row.market_value)
+    shares = float(row.shares)
+    current_price = market_value / shares if shares else 0
+    return {
+        "symbol": row.symbol.strip().upper(),
+        "company_name": row.company_name,
+        "shares": shares,
+        "avg_price": current_price,
+        "current_price": current_price,
+        "market_value": market_value,
+        "unrealized_pnl": 0,
+        "unrealized_return_pct": 0,
+        "opened_at": uploaded_at,
+        "source": "uploaded_current_holding",
+    }
+
+
+def _period_review(request: ReviewRequest, dashboard_data: dict[str, Any]) -> dict[str, Any]:
+    portfolio = dashboard_data.get("portfolio", {})
+    trades = [
+        row
+        for row in portfolio.get("trade_history", [])
+        if request.start_date <= str(row.get("date", ""))[:10] <= request.end_date
+    ]
+    analyses = [
+        row
+        for row in dashboard_data.get("analysis_log", {}).get("entries", [])
+        if request.start_date <= str(row.get("created_at", ""))[:10] <= request.end_date
+    ]
+    context = {
+        "period": [request.start_date, request.end_date],
+        "focus": request.focus or "",
+        "current_portfolio": portfolio,
+        "period_trades": trades,
+        "period_analysis_count": len(analyses),
+        "recent_analysis": analyses[-5:],
+    }
+    review = _call_openai_review(context) or _fallback_review(context)
+    return {
+        "id": _log_id(),
+        "created_at": _now(),
+        "start_date": request.start_date,
+        "end_date": request.end_date,
+        "focus": request.focus or "",
+        "trade_count": len(trades),
+        "analysis_count": len(analyses),
+        "review": review,
+    }
+
+
+def _call_openai_review(context: dict[str, Any]) -> dict[str, Any] | None:
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        return None
+    payload = {
+        "model": os.getenv("MODEL_OPENAI", "gpt-4.1-mini"),
+        "input": [
+            {
+                "role": "system",
+                "content": [
+                    {
+                        "type": "input_text",
+                        "text": (
+                            "You are a paper-trading review analyst. Review the selected period, "
+                            "explain what worked, what failed, and what to adjust. Return JSON only "
+                            "with keys: summary, lessons, mistakes, next_adjustments, risk_notes."
+                        ),
+                    }
+                ],
+            },
+            {"role": "user", "content": [{"type": "input_text", "text": json.dumps(context, ensure_ascii=False)}]},
+        ],
+        "text": {"format": _period_review_schema()},
+        "temperature": 0.2,
+        "max_output_tokens": int(os.getenv("OPENAI_REVIEW_MAX_OUTPUT_TOKENS", "1000")),
+    }
+    try:
+        response = requests.post(
+            "https://api.openai.com/v1/responses",
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            json=payload,
+            timeout=60,
+        )
+        response.raise_for_status()
+        data = response.json()
+        content = data.get("output_text") or _extract_openai_text(data)
+        parsed = json.loads(content)
+        parsed["status"] = "ok"
+        return parsed
+    except Exception as exc:
+        return {
+            "status": "error",
+            "summary": "OpenAI review failed.",
+            "error": str(exc),
+            "lessons": [],
+            "mistakes": [],
+            "next_adjustments": [],
+            "risk_notes": [],
+        }
+
+
+def _period_review_schema() -> dict[str, Any]:
+    return {
+        "type": "json_schema",
+        "name": "period_review",
+        "strict": True,
+        "schema": {
+            "type": "object",
+            "additionalProperties": False,
+            "properties": {
+                "summary": {"type": "string"},
+                "lessons": {"type": "array", "items": {"type": "string"}},
+                "mistakes": {"type": "array", "items": {"type": "string"}},
+                "next_adjustments": {"type": "array", "items": {"type": "string"}},
+                "risk_notes": {"type": "array", "items": {"type": "string"}},
+            },
+            "required": ["summary", "lessons", "mistakes", "next_adjustments", "risk_notes"],
+        },
+    }
+
+
+def _fallback_review(context: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "status": "rule_based_fallback",
+        "summary": f"Reviewed {len(context['period_trades'])} trades and {context['period_analysis_count']} saved analyses in the selected period.",
+        "lessons": ["Add API keys to enable AI-generated period review."],
+        "mistakes": [],
+        "next_adjustments": ["Run manual AI analysis after uploading current holdings."],
+        "risk_notes": ["This is paper-trading review only, not real-money advice."],
+    }
+
+
+def _append_log(path: Path, entry: dict[str, Any]) -> dict[str, Any]:
+    log = _read_json(path, {"entries": []})
+    entries = list(log.get("entries") or [])
+    entries.append(entry)
+    log["entries"] = entries[-250:]
+    _write_json(path, log)
+    return log
+
+
+def _log_id() -> str:
+    return datetime.now(UTC).strftime("%Y%m%d%H%M%S%f")
+
+
+def _extract_openai_text(data: dict[str, Any]) -> str:
+    chunks: list[str] = []
+    for item in data.get("output", []):
+        for content in item.get("content", []):
+            text = content.get("text")
+            if text:
+                chunks.append(text)
+    return "\n".join(chunks)
 
 
 def _read_json(path: Path, default: Any) -> Any:

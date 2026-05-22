@@ -12,7 +12,7 @@ The app is for analysis and paper trading only. It does not place real-money ord
 - `docs/index.html` is the UI, but it is served by FastAPI.
 - `docs/data/*.json` keeps generated analysis, paper state, ledger, and latest backtest output.
 - `data/stock_dashboard.sqlite3` stores backend backtest runs and cash movements.
-- `.github/workflows/analyze.yml` is optional scheduled analysis only. It no longer deploys the site.
+- `.github/workflows/analyze.yml` is optional manual analysis only. It no longer deploys the site or runs every 30 minutes.
 - `render.yaml` contains the Render web-service start command.
 
 ## Local Setup
@@ -76,6 +76,11 @@ Do not put API keys in frontend files. The browser only calls relative paths lik
 - `GET /api/health`
 - `GET /api/dashboard`
 - `GET /api/state`
+- `POST /api/analysis/run`
+- `GET /api/analysis/log`
+- `POST /api/portfolio/upload-holdings`
+- `POST /api/review`
+- `GET /api/review/log`
 - `POST /api/backtest`
 - `POST /api/paper/add-funds`
 - `POST /api/paper/withdraw`
@@ -105,6 +110,9 @@ You do not need to edit GitHub Variables for every backtest.
 
 The dashboard buttons are backend actions:
 
+- Run AI Analysis fetches current market data, calls the configured AI providers, and saves the result to Analysis Log.
+- Upload Holdings lets you enter current holdings as symbol, company, shares, and market value so AI can review your actual current exposure.
+- Period Review reflects on trades, saved analyses, and current holdings for a selected date range.
 - Add funds writes cash into backend paper state.
 - Withdraw deducts available cash.
 - Pause/Start updates backend trading status.
@@ -114,7 +122,7 @@ The initial balance is zero until you add funds.
 
 ## Optional GitHub Actions
 
-GitHub Actions still runs every 30 minutes if enabled. It is now only a scheduled analysis job that can update generated JSON files.
+GitHub Actions is no longer scheduled every 30 minutes. It remains as an optional manual workflow you can run from GitHub if you want to refresh generated JSON files outside the live Render app.
 
 It is not the production site deployment path. Render serves the live app.
 

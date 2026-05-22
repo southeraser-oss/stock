@@ -51,6 +51,15 @@
       font: inherit;
       min-width: 130px;
     }
+    textarea {
+      width: 100%;
+      min-height: 130px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 10px;
+      font: inherit;
+      resize: vertical;
+    }
     .control-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
     .primary-action { background: var(--ink); color: #fff; border-color: var(--ink); }
     .danger-action { color: var(--red); border-color: #efb4ad; }
@@ -81,6 +90,10 @@
     .calendar { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; }
     .calendar-day { min-height: 132px; }
     .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; align-items: end; }
+    .style-note { display: grid; gap: 10px; }
+    .style-note-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 10px; }
+    .style-note-item { border-top: 1px solid var(--line); padding-top: 10px; }
+    .style-note-item strong { display: block; margin-bottom: 4px; }
     .stock-card { min-height: 168px; }
     .symbol { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
     .symbol strong { font-size: 20px; }
@@ -126,6 +139,17 @@
 
     <section class="summary" id="summary"></section>
 
+    <section class="panel style-note" aria-label="Trading style note">
+      <h2>Trading Style Note</h2>
+      <p class="status">These four styles are defined in the backtest engine and sent to the AI backtest. The rule layer uses score, RSI range, stop loss, and take profit thresholds; DeepSeek receives the selected style with daily market candidates and returns simulated BUY/SELL/HOLD orders. Current AI mode still relies on the model to interpret the style name, while backend limits enforce max positions, allocation, confidence, and valid market symbols.</p>
+      <div class="style-note-grid">
+        <div class="style-note-item"><strong>Momentum</strong><span class="status">Trend-following baseline. Score >= 4, RSI 42-72, stop -7%, take +18%.</span></div>
+        <div class="style-note-item"><strong>Growth</strong><span class="status">More tolerant of volatility for larger upside. Score >= 3, RSI 38-78, stop -10%, take +24%.</span></div>
+        <div class="style-note-item"><strong>Conservative</strong><span class="status">Stricter risk control and earlier exits. Score >= 4, RSI 40-65, stop -5%, take +12%.</span></div>
+        <div class="style-note-item"><strong>High volatility</strong><span class="status">Higher-risk mode with wider movement bands. Score >= 3, RSI 35-82, stop -12%, take +30%.</span></div>
+      </div>
+    </section>
+
     <section class="panel">
       <h2>Paper Controls</h2>
       <div class="control-row">
@@ -144,6 +168,7 @@
       <button class="tab" type="button" data-tab="holdings" aria-selected="false">Holdings</button>
       <button class="tab" type="button" data-tab="trades" aria-selected="false">Trades</button>
       <button class="tab" type="button" data-tab="backtest" aria-selected="false">Backtest</button>
+      <button class="tab" type="button" data-tab="review" aria-selected="false">Review</button>
       <button class="tab" type="button" data-tab="ledger" aria-selected="false">Review Ledger</button>
       <button class="tab" type="button" data-tab="analysis" aria-selected="false">Analysis</button>
     </section>
@@ -165,6 +190,15 @@
 
     <section id="holdings" class="view panel" hidden>
       <h2>Current Holdings</h2>
+      <div class="form-grid">
+        <label class="status">Upload current holdings, one per line: symbol, company, shares, market value
+          <textarea id="holdingsUpload" placeholder="AAPL, Apple Inc., 10, 3000&#10;0700.HK, Tencent, 100, 38000"></textarea>
+        </label>
+        <div>
+          <button type="button" id="uploadHoldings" class="primary-action">Upload Holdings</button>
+          <p class="status" id="holdingsUploadStatus"></p>
+        </div>
+      </div>
       <div id="holdingsTable"></div>
     </section>
 
@@ -193,10 +227,6 @@
         <p class="status" id="backendStatus">Checking backend connection...</p>
         <div id="backtestResult" class="status"></div>
       </article>
-      <article class="panel">
-        <h2>Scheduled AI Backtest</h2>
-        <div id="serverBacktest"></div>
-      </article>
     </section>
 
     <section id="ledger" class="view panel" hidden>
@@ -204,10 +234,32 @@
       <div class="calendar" id="ledgerCalendar"></div>
     </section>
 
+    <section id="review" class="view" hidden>
+      <article class="panel">
+        <h2>Period Review</h2>
+        <div class="form-grid">
+          <label class="status">Start date<input id="reviewStart" type="date"></label>
+          <label class="status">End date<input id="reviewEnd" type="date"></label>
+          <label class="status">Focus<input id="reviewFocus" type="text" placeholder="Risk, missed sells, position sizing"></label>
+          <button type="button" id="runReview" class="primary-action">Run Review</button>
+        </div>
+        <div id="reviewResult" class="status"></div>
+      </article>
+      <article class="panel">
+        <h2>Review Log</h2>
+        <div id="reviewLog"></div>
+      </article>
+    </section>
+
     <section id="analysis" class="view" hidden>
       <div class="layout">
         <article class="panel">
           <h2>Watchlist Signals</h2>
+          <div class="control-row">
+            <button type="button" id="runAnalysis" class="primary-action">Run AI Analysis</button>
+            <input id="analysisNote" type="text" placeholder="Optional note">
+          </div>
+          <p class="status" id="analysisStatus"></p>
           <div class="grid" id="cards"></div>
         </article>
         <article class="panel">
@@ -215,6 +267,10 @@
           <pre id="llm">No LLM analysis loaded.</pre>
         </article>
       </div>
+      <article class="panel">
+        <h2>Analysis Log</h2>
+        <div id="analysisLog"></div>
+      </article>
     </section>
   </main>
 
@@ -230,6 +286,13 @@
     const toggleTrading = document.querySelector("#toggleTrading");
     const sellAll = document.querySelector("#sellAll");
     const reloadState = document.querySelector("#reloadState");
+    const holdingsUpload = document.querySelector("#holdingsUpload");
+    const uploadHoldings = document.querySelector("#uploadHoldings");
+    const holdingsUploadStatus = document.querySelector("#holdingsUploadStatus");
+    const runAnalysis = document.querySelector("#runAnalysis");
+    const analysisNote = document.querySelector("#analysisNote");
+    const analysisStatus = document.querySelector("#analysisStatus");
+    const analysisLog = document.querySelector("#analysisLog");
     const runBacktest = document.querySelector("#runBacktest");
     const btStart = document.querySelector("#btStart");
     const btEnd = document.querySelector("#btEnd");
@@ -237,7 +300,12 @@
     const btCapital = document.querySelector("#btCapital");
     const backtestResult = document.querySelector("#backtestResult");
     const backendStatus = document.querySelector("#backendStatus");
-    const serverBacktest = document.querySelector("#serverBacktest");
+    const reviewStart = document.querySelector("#reviewStart");
+    const reviewEnd = document.querySelector("#reviewEnd");
+    const reviewFocus = document.querySelector("#reviewFocus");
+    const runReview = document.querySelector("#runReview");
+    const reviewResult = document.querySelector("#reviewResult");
+    const reviewLog = document.querySelector("#reviewLog");
     const ledgerCalendar = document.querySelector("#ledgerCalendar");
     const controlStatus = document.querySelector("#controlStatus");
     const holdingsTable = document.querySelector("#holdingsTable");
@@ -299,32 +367,11 @@
       renderTrades(portfolio.trade_history || []);
       renderControlStatus(portfolio);
       renderAutomation(data.automation || {});
-      renderServerBacktest(data.backtest || {});
       renderLedger(data.ledger || {});
+      renderAnalysisLog(data.analysis_log || {});
+      renderReviewLog(data.review_log || {});
       cards.innerHTML = (data.stocks || []).map(renderCard).join("");
       llmEl.textContent = JSON.stringify(data.llm_analysis || {}, null, 2);
-    }
-
-    function renderServerBacktest(backtest) {
-      if (!backtest || !backtest.start_date) {
-        serverBacktest.innerHTML = `<div class="empty">No scheduled backtest result yet.</div>`;
-        return;
-      }
-      serverBacktest.innerHTML = `
-        <div class="summary">
-          <article class="panel"><div class="metric-label">Period</div><div>${backtest.start_date} to ${backtest.end_date}</div></article>
-          <article class="panel"><div class="metric-label">Style / Engine</div><div>${backtest.style} / ${backtest.engine || "n/a"}</div></article>
-          <article class="panel"><div class="metric-label">Ending Balance</div><div class="metric-value">${money(backtest.ending_balance)}</div></article>
-          <article class="panel"><div class="metric-label">Return</div><div class="metric-value ${signedClass(backtest.total_return_pct)}">${num(backtest.total_return_pct, "%")}</div></article>
-        </div>
-        <div class="line"><span>DeepSeek days</span><strong>${backtest.ai?.deepseek_ok_days ?? 0} ok / ${backtest.ai?.deepseek_skipped_days ?? 0} skipped / ${backtest.ai?.deepseek_error_days ?? 0} error</strong></div>
-        <div class="line"><span>OpenAI review</span><strong>${backtest.ai?.openai_review?.status || "not available"}</strong></div>
-        <p>${backtest.summary || ""}</p>
-        <h2>Scheduled Orders</h2>
-        ${renderMiniTrades(backtest.trade_history || [])}
-        <h2>Daily AI Decisions</h2>
-        ${renderDecisionTable(backtest.ai?.deepseek_daily_decisions || [])}
-      `;
     }
 
     function renderAutomation(automation) {
@@ -351,6 +398,39 @@
           <div class="line"><span>Portfolio</span><strong>${num(entry.portfolio_return_pct, "%")}</strong></div>
           <div class="line"><span>Backtest</span><strong>${num(entry.backtest_return_pct, "%")}</strong></div>
           <p class="status">${entry.review || ""}</p>
+        </article>
+      `).join("");
+    }
+
+    function renderAnalysisLog(log) {
+      const entries = (log.entries || []).slice().reverse();
+      if (!entries.length) {
+        analysisLog.innerHTML = `<div class="empty">No AI analysis has been saved yet.</div>`;
+        return;
+      }
+      analysisLog.innerHTML = entries.slice(0, 20).map(entry => `
+        <article class="panel">
+          <strong>${new Date(entry.created_at).toLocaleString()}</strong>
+          <p class="status">${entry.note || "Manual AI analysis"}</p>
+          <div class="line"><span>Symbols</span><strong>${(entry.symbols || []).slice(0, 8).join(", ") || "n/a"}</strong></div>
+          <div class="line"><span>DeepSeek</span><strong>${entry.llm_analysis?.provider_status?.deepseek || "n/a"}</strong></div>
+          <div class="line"><span>OpenAI</span><strong>${entry.llm_analysis?.provider_status?.openai || "n/a"}</strong></div>
+          <pre>${JSON.stringify(entry.llm_analysis || {}, null, 2)}</pre>
+        </article>
+      `).join("");
+    }
+
+    function renderReviewLog(log) {
+      const entries = (log.entries || []).slice().reverse();
+      if (!entries.length) {
+        reviewLog.innerHTML = `<div class="empty">No period reviews yet.</div>`;
+        return;
+      }
+      reviewLog.innerHTML = entries.slice(0, 20).map(entry => `
+        <article class="panel">
+          <strong>${entry.start_date} to ${entry.end_date}</strong>
+          <p class="status">${entry.focus || "Period review"} | Trades: ${entry.trade_count || 0} | Analyses: ${entry.analysis_count || 0}</p>
+          <pre>${JSON.stringify(entry.review || {}, null, 2)}</pre>
         </article>
       `).join("");
     }
@@ -498,6 +578,60 @@
     reloadState.addEventListener("click", () => {
       loadDashboard();
     });
+    uploadHoldings.addEventListener("click", async () => {
+      try {
+        const holdings = parseHoldingsUpload(holdingsUpload.value);
+        if (!holdings.length) throw new Error("Add at least one holding.");
+        holdingsUploadStatus.textContent = "Uploading holdings...";
+        const response = await fetch("/api/portfolio/upload-holdings", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ holdings, note: "Dashboard holdings upload" }),
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(payload.detail || `Backend returned ${response.status}`);
+        latestData = payload.dashboard || latestData;
+        renderDashboard(latestData);
+        holdingsUploadStatus.textContent = `Uploaded ${holdings.length} holdings.`;
+      } catch (error) {
+        holdingsUploadStatus.innerHTML = `<span class="error">${error.message}</span>`;
+      }
+    });
+    runAnalysis.addEventListener("click", async () => {
+      try {
+        analysisStatus.textContent = "Running AI analysis...";
+        const response = await fetch("/api/analysis/run", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ max_symbols: 35, note: analysisNote.value || "" }),
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(payload.detail || `Backend returned ${response.status}`);
+        latestData = payload.dashboard || latestData;
+        renderDashboard(latestData);
+        analysisStatus.textContent = "AI analysis saved to log.";
+      } catch (error) {
+        analysisStatus.innerHTML = `<span class="error">${error.message}</span>`;
+      }
+    });
+    runReview.addEventListener("click", async () => {
+      try {
+        if (!reviewStart.value || !reviewEnd.value) throw new Error("Choose review start and end dates.");
+        reviewResult.textContent = "Running period review...";
+        const response = await fetch("/api/review", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ start_date: reviewStart.value, end_date: reviewEnd.value, focus: reviewFocus.value || "" }),
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(payload.detail || `Backend returned ${response.status}`);
+        reviewResult.innerHTML = `<pre>${JSON.stringify(payload.entry.review || {}, null, 2)}</pre>`;
+        const logResponse = await fetch(`/api/review/log?ts=${Date.now()}`);
+        if (logResponse.ok) renderReviewLog(await logResponse.json());
+      } catch (error) {
+        reviewResult.innerHTML = `<span class="error">${error.message}</span>`;
+      }
+    });
     runBacktest.addEventListener("click", async () => {
       const request = {
         start: btStart.value,
@@ -520,9 +654,21 @@
       `;
     });
     window.addEventListener("resize", () => loadDashboard());
-    setInterval(loadDashboard, 30 * 60 * 1000);
     checkBackendHealth();
     loadDashboard();
+
+    function parseHoldingsUpload(text) {
+      return text.split(/\n+/).map(line => line.trim()).filter(Boolean).map(line => {
+        const parts = line.split(",").map(part => part.trim());
+        if (parts.length < 4) throw new Error(`Invalid holding row: ${line}`);
+        return {
+          symbol: parts[0],
+          company_name: parts[1],
+          shares: Number(parts[2]),
+          market_value: Number(parts[3]),
+        };
+      }).filter(row => row.symbol && row.shares > 0 && row.market_value >= 0);
+    }
 
     async function postPaperAction(path, body = {}) {
       try {
@@ -586,6 +732,13 @@
     }
 
     function setBacktestDefaults() {
+      if (reviewStart && reviewEnd && !reviewStart.value && !reviewEnd.value) {
+        const reviewEndDate = new Date();
+        const reviewStartDate = new Date(reviewEndDate);
+        reviewStartDate.setDate(reviewStartDate.getDate() - 30);
+        reviewEnd.value = reviewEndDate.toISOString().slice(0, 10);
+        reviewStart.value = reviewStartDate.toISOString().slice(0, 10);
+      }
       if (btStart.value || btEnd.value) return;
       const dates = Object.values(latestData?.history?.history || {}).flat().map(row => row.date).filter(Boolean).sort();
       if (dates.length) {
