@@ -4,7 +4,7 @@ import json
 import os
 import sys
 from copy import deepcopy
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, Literal
 
@@ -85,6 +85,11 @@ class HoldingInput(BaseModel):
 class HoldingsUploadRequest(BaseModel):
     holdings: list[HoldingInput]
     note: str | None = None
+
+
+class HoldingUpdateRequest(BaseModel):
+    symbol: str
+    shares: float = Field(gt=0)
 
 
 class ReviewRequest(BaseModel):
@@ -204,8 +209,56 @@ def upload_holdings(request: HoldingsUploadRequest) -> dict[str, Any]:
     state_data["holdings"] = [_uploaded_holding(row, uploaded_at) for row in request.holdings]
     state_data["uploaded_holdings_note"] = request.note or ""
     state_data["updated_at"] = uploaded_at
-    _save_paper_state(_normalize_paper_state(state_data))
+    _save_paper_state(state_data)
     return {"portfolio": _paper_state(), "dashboard": _dashboard_payload()}
+
+
+@app.post("/api/portfolio/update-holding")
+def update_holding(request: HoldingUpdateRequest) -> dict[str, Any]:
+    state_data = _paper_state()
+    symbol = request.symbol.strip().upper()
+    updated = False
+    for holding in state_data.get("holdings", []):
+        if str(holding.get("symbol", "")).upper() != symbol:
+            continue
+        price = float(holding.get("current_price") or 0)
+        avg_price = float(holding.get("avg_price") or price or 0)
+        holding["shares"] = request.shares
+        holding["market_value"] = round(request.shares * price, 2)
+        holding["unrealized_pnl"] = round((price - avg_price) * request.shares, 2)
+        holding["unrealized_return_pct"] = round(((price / avg_price) - 1) * 100, 2) if avg_price else 0
+        holding["updated_at"] = _now()
+        updated = True
+        break
+    if not updated:
+        raise HTTPException(status_code=404, detail=f"Holding not found: {symbol}")
+    state_data["updated_at"] = _now()
+    _save_paper_state(state_data)
+    return {"portfolio": _paper_state(), "dashboard": _dashboard_payload()}
+
+
+@app.post("/api/portfolio/refresh-prices")
+def refresh_holding_prices() -> dict[str, Any]:
+    state_data = _paper_state()
+    refreshed_at = _now()
+    errors: list[str] = []
+    for holding in state_data.get("holdings", []):
+        try:
+            price = _latest_market_price(str(holding.get("symbol", "")))
+            if price <= 0:
+                raise ValueError("No latest price")
+            shares = float(holding.get("shares") or 0)
+            avg_price = float(holding.get("avg_price") or price)
+            holding["current_price"] = round(price, 4)
+            holding["market_value"] = round(shares * price, 2)
+            holding["unrealized_pnl"] = round((price - avg_price) * shares, 2)
+            holding["unrealized_return_pct"] = round(((price / avg_price) - 1) * 100, 2) if avg_price else 0
+            holding["price_refreshed_at"] = refreshed_at
+        except Exception as exc:
+            errors.append(f"{holding.get('symbol')}: {exc}")
+    state_data["updated_at"] = refreshed_at
+    _save_paper_state(state_data)
+    return {"portfolio": _paper_state(), "dashboard": _dashboard_payload(), "errors": errors}
 
 
 @app.post("/api/review")
@@ -225,7 +278,7 @@ def add_funds(request: CashMovementRequest) -> dict[str, Any]:
     state_data = _paper_state()
     state_data["cash"] = float(state_data.get("cash", 0)) + request.amount
     _append_cash_movement(state_data, "DEPOSIT", request.amount, request.note)
-    _save_paper_state(_normalize_paper_state(state_data))
+    _save_paper_state(state_data)
     return {"portfolio": _paper_state(), "dashboard": _dashboard_payload()}
 
 
@@ -237,7 +290,7 @@ def withdraw_funds(request: CashMovementRequest) -> dict[str, Any]:
         raise HTTPException(status_code=400, detail=f"Withdrawal exceeds available cash: {available:.2f}")
     state_data["cash"] = available - request.amount
     _append_cash_movement(state_data, "WITHDRAWAL", request.amount, request.note)
-    _save_paper_state(_normalize_paper_state(state_data))
+    _save_paper_state(state_data)
     return {"portfolio": _paper_state(), "dashboard": _dashboard_payload()}
 
 
@@ -247,7 +300,7 @@ def pause_paper() -> dict[str, Any]:
     state_data["trading_enabled"] = False
     state_data.setdefault("strategy", {})["trading_enabled"] = False
     state_data["updated_at"] = _now()
-    _save_paper_state(_normalize_paper_state(state_data))
+    _save_paper_state(state_data, record_equity=False)
     return {"portfolio": _paper_state(), "dashboard": _dashboard_payload()}
 
 
@@ -257,7 +310,7 @@ def resume_paper() -> dict[str, Any]:
     state_data["trading_enabled"] = True
     state_data.setdefault("strategy", {})["trading_enabled"] = True
     state_data["updated_at"] = _now()
-    _save_paper_state(_normalize_paper_state(state_data))
+    _save_paper_state(state_data, record_equity=False)
     return {"portfolio": _paper_state(), "dashboard": _dashboard_payload()}
 
 
@@ -287,7 +340,7 @@ def sell_all() -> dict[str, Any]:
     state_data["holdings"] = []
     state_data["trade_history"] = trade_history
     state_data["updated_at"] = sold_at
-    _save_paper_state(_normalize_paper_state(state_data))
+    _save_paper_state(state_data)
     return {"portfolio": _paper_state(), "dashboard": _dashboard_payload()}
 
 
@@ -409,6 +462,19 @@ def _normalize_paper_state(state_data: dict[str, Any]) -> dict[str, Any]:
     return normalized
 
 
+def _append_equity_point(state_data: dict[str, Any]) -> dict[str, Any]:
+    curve = list(state_data.get("equity_curve") or [])
+    point = {
+        "date": _now(),
+        "balance": round(float(state_data.get("balance") or 0), 2),
+        "cash": round(float(state_data.get("cash") or 0), 2),
+    }
+    if not curve or float(curve[-1].get("balance", -1)) != point["balance"] or float(curve[-1].get("cash", -1)) != point["cash"]:
+        curve.append(point)
+    state_data["equity_curve"] = curve[-250:]
+    return state_data
+
+
 def _append_cash_movement(state_data: dict[str, Any], movement_type: str, amount: float, note: str | None) -> None:
     created_at = _now()
     state_data.setdefault("cash_movements", []).append(
@@ -502,6 +568,14 @@ def _safe_analyst_summary(ticker: yf.Ticker) -> dict[str, Any] | None:
     except Exception:
         pass
     return json.loads(json.dumps(summary, default=str)) if summary else None
+
+
+def _latest_market_price(symbol: str) -> float:
+    history = yf.Ticker(symbol).history(period="5d", interval="1d", auto_adjust=False)
+    if history.empty:
+        return 0
+    close = history["Close"].dropna()
+    return float(close.iloc[-1]) if not close.empty else 0
 
 
 def _uploaded_holding(row: HoldingInput, uploaded_at: str) -> dict[str, Any]:
@@ -641,6 +715,9 @@ def _append_log(path: Path, entry: dict[str, Any]) -> dict[str, Any]:
     log = _read_json(path, {"entries": []})
     entries = list(log.get("entries") or [])
     entries.append(entry)
+    if path == ANALYSIS_LOG_PATH:
+        cutoff = datetime.now(UTC) - timedelta(days=10)
+        entries = [row for row in entries if _parse_time(row.get("created_at")) >= cutoff]
     log["entries"] = entries[-250:]
     _write_json(path, log)
     return log
@@ -660,6 +737,16 @@ def _extract_openai_text(data: dict[str, Any]) -> str:
     return "\n".join(chunks)
 
 
+def _parse_time(value: Any) -> datetime:
+    if not value:
+        return datetime.now(UTC)
+    try:
+        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+        return parsed if parsed.tzinfo else parsed.replace(tzinfo=UTC)
+    except ValueError:
+        return datetime.now(UTC)
+
+
 def _read_json(path: Path, default: Any) -> Any:
     if not path.exists():
         return deepcopy(default)
@@ -674,8 +761,11 @@ def _write_json(path: Path, payload: Any) -> None:
     path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
 
 
-def _save_paper_state(state_data: dict[str, Any]) -> None:
-    _write_json(PAPER_STATE_PATH, state_data)
+def _save_paper_state(state_data: dict[str, Any], record_equity: bool = True) -> None:
+    normalized = _normalize_paper_state(state_data)
+    if record_equity:
+        normalized = _append_equity_point(normalized)
+    _write_json(PAPER_STATE_PATH, normalized)
 
 
 def _restore_env(name: str, previous: str | None) -> None:

@@ -198,6 +198,7 @@
         </label>
         <div>
           <button type="button" id="uploadHoldings" class="primary-action">Upload Holdings</button>
+          <button type="button" id="refreshPrices">Refresh Prices</button>
           <p class="status" id="holdingsUploadStatus"></p>
         </div>
       </div>
@@ -268,6 +269,7 @@
           <label class="status">Currency<input id="cashCurrency" type="text" value="SGD"></label>
           <label class="status">Notes<input id="analysisNote" type="text" placeholder="Optional note"></label>
           <button type="button" id="runAnalysis" class="primary-action">Run AI Analysis</button>
+          <button type="button" id="exportActionPlan">Export Plan .md</button>
         </div>
         <p class="status" id="analysisStatus"></p>
         <div class="action-plan" id="actionPlan"></div>
@@ -278,6 +280,10 @@
       </article>
       <article class="panel">
         <h2>Analysis Log</h2>
+        <div class="control-row">
+          <input id="logExportDays" type="number" min="1" max="10" value="10" aria-label="Analysis log days to export">
+          <button type="button" id="exportAnalysisLog">Export Log .md</button>
+        </div>
         <div id="analysisLog"></div>
       </article>
     </section>
@@ -296,14 +302,18 @@
     const reloadState = document.querySelector("#reloadState");
     const holdingsUpload = document.querySelector("#holdingsUpload");
     const uploadHoldings = document.querySelector("#uploadHoldings");
+    const refreshPrices = document.querySelector("#refreshPrices");
     const holdingsUploadStatus = document.querySelector("#holdingsUploadStatus");
     const runAnalysis = document.querySelector("#runAnalysis");
+    const exportActionPlan = document.querySelector("#exportActionPlan");
     const analysisNote = document.querySelector("#analysisNote");
     const cashIntent = document.querySelector("#cashIntent");
     const cashAmount = document.querySelector("#cashAmount");
     const cashCurrency = document.querySelector("#cashCurrency");
     const analysisStatus = document.querySelector("#analysisStatus");
     const analysisLog = document.querySelector("#analysisLog");
+    const logExportDays = document.querySelector("#logExportDays");
+    const exportAnalysisLog = document.querySelector("#exportAnalysisLog");
     const actionPlan = document.querySelector("#actionPlan");
     const runBacktest = document.querySelector("#runBacktest");
     const btStart = document.querySelector("#btStart");
@@ -328,6 +338,7 @@
     const tabs = document.querySelectorAll(".tab");
     const views = document.querySelectorAll(".view");
     let latestData = null;
+    let editingHoldingSymbol = null;
 
     function money(value) {
       if (value === null || value === undefined || Number.isNaN(value)) return "n/a";
@@ -391,7 +402,7 @@
       automationStatus.innerHTML = `
         <div class="line"><span>Scheduler</span><strong>${automation.scheduler || "unknown"}</strong></div>
         <div class="line"><span>Cron</span><strong>${automation.cron || "n/a"}</strong></div>
-        <div class="line"><span>Every</span><strong>${automation.interval_minutes || "n/a"} min</strong></div>
+        <div class="line"><span>Mode</span><strong>${automation.interval_minutes ? `${automation.interval_minutes} min` : "manual"}</strong></div>
         <div class="line"><span>Trigger</span><strong>${automation.event_name || "n/a"}</strong></div>
         <div class="line"><span>Run</span><strong>${runLink}</strong></div>
       `;
@@ -531,8 +542,18 @@
 
     function renderSparkline(curve) {
       sparkline.innerHTML = "";
-      if (!curve || curve.length < 2) {
-        sparkline.innerHTML = `<text x="10" y="70" fill="#667085">Not enough equity history.</text>`;
+      if (!curve || curve.length === 0) {
+        sparkline.innerHTML = `<text x="10" y="70" fill="#667085">Upload holdings or refresh prices to start equity tracking.</text>`;
+        return;
+      }
+      if (curve.length === 1) {
+        const value = Number(curve[0].balance || 0);
+        sparkline.setAttribute("viewBox", "0 0 720 130");
+        sparkline.innerHTML = `
+          <circle cx="360" cy="65" r="5" fill="#255a9b" />
+          <text x="10" y="24" fill="#667085">${money(value)}</text>
+          <text x="10" y="48" fill="#667085">${curve[0].date || ""}</text>
+        `;
         return;
       }
       const width = sparkline.clientWidth || 720;
@@ -561,20 +582,42 @@
       }
       holdingsTable.innerHTML = `
         <table>
-          <thead><tr><th>Symbol</th><th class="num">Shares</th><th class="num">Avg</th><th class="num">Current</th><th class="num">Value</th><th class="num">Unrealized</th><th>Opened</th></tr></thead>
+          <thead><tr><th>Symbol</th><th class="num">Shares</th><th class="num">Avg</th><th class="num">Current</th><th class="num">Value</th><th class="num">Unrealized</th><th>Opened</th><th>Actions</th></tr></thead>
           <tbody>${rows.map(row => `
             <tr>
               <td><strong>${row.symbol}</strong></td>
-              <td class="num">${num(row.shares)}</td>
+              <td class="num">${editingHoldingSymbol === row.symbol ? `<input class="shares-edit" data-symbol="${row.symbol}" type="number" min="0" step="0.0001" value="${row.shares}">` : num(row.shares)}</td>
               <td class="num">${money(row.avg_price)}</td>
               <td class="num">${money(row.current_price)}</td>
               <td class="num">${money(row.market_value)}</td>
               <td class="num ${signedClass(row.unrealized_pnl)}">${money(row.unrealized_pnl)} (${num(row.unrealized_return_pct, "%")})</td>
               <td>${row.opened_at}</td>
+              <td>${editingHoldingSymbol === row.symbol ? `
+                <button type="button" class="save-holding" data-symbol="${row.symbol}">Save</button>
+                <button type="button" class="cancel-holding">Cancel</button>
+              ` : `<button type="button" class="edit-holding" data-symbol="${row.symbol}">Edit</button>`}</td>
             </tr>
           `).join("")}</tbody>
         </table>
       `;
+      holdingsTable.querySelectorAll(".edit-holding").forEach(button => {
+        button.addEventListener("click", () => {
+          editingHoldingSymbol = button.dataset.symbol;
+          renderHoldings(latestData?.portfolio?.holdings || []);
+        });
+      });
+      holdingsTable.querySelectorAll(".cancel-holding").forEach(button => {
+        button.addEventListener("click", () => {
+          editingHoldingSymbol = null;
+          renderHoldings(latestData?.portfolio?.holdings || []);
+        });
+      });
+      holdingsTable.querySelectorAll(".save-holding").forEach(button => {
+        button.addEventListener("click", async () => {
+          const input = holdingsTable.querySelector(`.shares-edit[data-symbol="${button.dataset.symbol}"]`);
+          await saveHoldingShares(button.dataset.symbol, Number(input.value || 0));
+        });
+      });
     }
 
     function renderTrades(rows) {
@@ -680,6 +723,28 @@
         holdingsUploadStatus.innerHTML = `<span class="error">${error.message}</span>`;
       }
     });
+    refreshPrices.addEventListener("click", async () => {
+      try {
+        holdingsUploadStatus.textContent = "Refreshing market prices...";
+        const response = await fetch("/api/portfolio/refresh-prices", { method: "POST" });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(payload.detail || `Backend returned ${response.status}`);
+        latestData = payload.dashboard || latestData;
+        renderDashboard(latestData);
+        holdingsUploadStatus.textContent = payload.errors?.length ? `Updated with warnings: ${payload.errors.join("; ")}` : "Holdings and balance refreshed.";
+      } catch (error) {
+        holdingsUploadStatus.innerHTML = `<span class="error">${error.message}</span>`;
+      }
+    });
+    exportActionPlan.addEventListener("click", () => {
+      const markdown = buildActionPlanMarkdown(latestData?.llm_analysis || {});
+      downloadMarkdown(`ai-action-plan-${new Date().toISOString().slice(0, 10)}.md`, markdown);
+    });
+    exportAnalysisLog.addEventListener("click", () => {
+      const days = Math.max(1, Math.min(10, Number(logExportDays.value || 10)));
+      const markdown = buildAnalysisLogMarkdown(latestData?.analysis_log || {}, days);
+      downloadMarkdown(`analysis-log-${days}d-${new Date().toISOString().slice(0, 10)}.md`, markdown);
+    });
     runAnalysis.addEventListener("click", async () => {
       try {
         analysisStatus.textContent = "Running AI analysis...";
@@ -757,6 +822,88 @@
           market_value: Number(parts[3]),
         };
       }).filter(row => row.symbol && row.shares > 0 && row.market_value >= 0);
+    }
+
+    async function saveHoldingShares(symbol, shares) {
+      try {
+        if (!shares || shares <= 0) throw new Error("Shares must be greater than 0.");
+        holdingsUploadStatus.textContent = `Saving ${symbol} shares...`;
+        const response = await fetch("/api/portfolio/update-holding", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ symbol, shares }),
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(payload.detail || `Backend returned ${response.status}`);
+        latestData = payload.dashboard || latestData;
+        editingHoldingSymbol = null;
+        renderDashboard(latestData);
+        holdingsUploadStatus.textContent = `${symbol} shares updated.`;
+      } catch (error) {
+        holdingsUploadStatus.innerHTML = `<span class="error">${error.message}</span>`;
+      }
+    }
+
+    function buildActionPlanMarkdown(analysis) {
+      const premium = analysis.openai_premium || {};
+      const plan = premium.action_plan || {};
+      const lines = [
+        "# AI Action Plan",
+        "",
+        `Generated: ${new Date().toLocaleString()}`,
+        "",
+        `Market view: ${premium.market_view || "n/a"}`,
+        "",
+      ];
+      appendPlanMarkdown(lines, "Conservative", plan.conservative);
+      appendPlanMarkdown(lines, "Fund / ETF", plan.fund);
+      appendPlanMarkdown(lines, "Steady", plan.steady);
+      lines.push("## Current Holding Actions", "");
+      (plan.current_holding_actions || []).forEach(row => {
+        lines.push(`- ${row.symbol} ${row.company_name || ""}: ${row.recommended_action}; ${row.quantity_or_percent}; trigger/limit ${row.trigger_or_limit_price}; ${row.reason}`);
+      });
+      if (!(plan.current_holding_actions || []).length) lines.push("- No current holding action suggested.");
+      return lines.join("\n");
+    }
+
+    function appendPlanMarkdown(lines, title, plan) {
+      lines.push(`## ${title}`, "", plan?.summary || "No summary.", "", `Cash note: ${plan?.cash_note || "n/a"}`, "", "### Buy");
+      (plan?.buys || []).forEach(row => lines.push(`- ${row.symbol} ${row.company_name || ""}: ${row.amount}; ${row.quantity}; target ${row.target_price}; ${row.reason}`));
+      if (!(plan?.buys || []).length) lines.push("- No buy suggested.");
+      lines.push("", "### Sell");
+      (plan?.sells || []).forEach(row => lines.push(`- ${row.symbol} ${row.company_name || ""}: ${row.amount}; ${row.quantity}; target ${row.target_price}; ${row.reason}`));
+      if (!(plan?.sells || []).length) lines.push("- No sell suggested.");
+      lines.push("");
+    }
+
+    function buildAnalysisLogMarkdown(log, days) {
+      const cutoff = new Date();
+      cutoff.setDate(cutoff.getDate() - days);
+      const entries = (log.entries || []).filter(entry => new Date(entry.created_at) >= cutoff);
+      const lines = [`# Analysis Log - Last ${days} Days`, ""];
+      entries.forEach(entry => {
+        lines.push(`## ${new Date(entry.created_at).toLocaleString()}`, "");
+        lines.push(`Note: ${entry.note || "n/a"}`);
+        lines.push(`Cash intent: ${entry.cash_intent || "none"} ${entry.cash_amount || 0} ${entry.cash_currency || ""}`);
+        lines.push(`DeepSeek: ${entry.llm_analysis?.provider_status?.deepseek || "n/a"}`);
+        lines.push(`OpenAI: ${entry.llm_analysis?.provider_status?.openai || "n/a"}`);
+        lines.push(`Market view: ${entry.llm_analysis?.openai_premium?.market_view || entry.llm_analysis?.deepseek?.market_view || "n/a"}`, "");
+        appendPlanMarkdown(lines, "Conservative", entry.llm_analysis?.openai_premium?.action_plan?.conservative);
+        appendPlanMarkdown(lines, "Fund / ETF", entry.llm_analysis?.openai_premium?.action_plan?.fund);
+        appendPlanMarkdown(lines, "Steady", entry.llm_analysis?.openai_premium?.action_plan?.steady);
+      });
+      if (!entries.length) lines.push("No analysis entries in the selected range.");
+      return lines.join("\n");
+    }
+
+    function downloadMarkdown(filename, text) {
+      const blob = new Blob([text], { type: "text/markdown;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      link.click();
+      URL.revokeObjectURL(url);
     }
 
     async function postPaperAction(path, body = {}) {

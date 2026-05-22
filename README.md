@@ -79,6 +79,8 @@ Do not put API keys in frontend files. The browser only calls relative paths lik
 - `POST /api/analysis/run`
 - `GET /api/analysis/log`
 - `POST /api/portfolio/upload-holdings`
+- `POST /api/portfolio/update-holding`
+- `POST /api/portfolio/refresh-prices`
 - `POST /api/review`
 - `GET /api/review/log`
 - `POST /api/backtest`
@@ -112,6 +114,8 @@ The dashboard buttons are backend actions:
 
 - Run AI Analysis fetches current market data, calls the configured AI providers, and saves the result to Analysis Log.
 - Upload Holdings lets you enter current holdings as symbol, company, shares, and market value so AI can review your actual current exposure.
+- Edit Holdings lets you adjust shares inline, then save or cancel. Refresh Prices fetches latest market prices and updates holding values, balance, and the equity curve.
+- Export Plan downloads the latest AI Action Plan as Markdown. Analysis Log keeps the last 10 days and can be exported by selected day range.
 - Period Review reflects on trades, saved analyses, and current holdings for a selected date range.
 - Add funds writes cash into backend paper state.
 - Withdraw deducts available cash.
