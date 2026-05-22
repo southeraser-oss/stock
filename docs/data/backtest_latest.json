@@ -1,0 +1,1282 @@
+{
+  "generated_at": "2026-05-22T02:37:04.479295+00:00",
+  "start_date": "2026-01-01",
+  "end_date": "2026-05-22",
+  "style": "momentum",
+  "engine": "deepseek_daily_ai",
+  "initial_capital": 100000.0,
+  "ending_balance": 100000.0,
+  "total_return_pct": 0.0,
+  "cash": 100000.0,
+  "holdings": [],
+  "trade_history": [],
+  "equity_curve": [
+    {
+      "date": "2026-01-02",
+      "balance": 100000.0,
+      "cash": 100000.0
+    },
+    {
+      "date": "2026-01-05",
+      "balance": 100000.0,
+      "cash": 100000.0
+    },
+    {
+      "date": "2026-01-06",
+      "balance": 100000.0,
+      "cash": 100000.0
+    },
+    {
+      "date": "2026-01-07",
+      "balance": 100000.0,
+      "cash": 100000.0
+    },
+    {
+      "date": "2026-01-08",
+      "balance": 100000.0,
+      "cash": 100000.0
+    },
+    {
+      "date": "2026-01-09",
+      "balance": 100000.0,
+      "cash": 100000.0
+    },
+    {
+      "date": "2026-01-12",
+      "balance": 100000.0,
+      "cash": 100000.0
+    },
+    {
+      "date": "2026-01-13",
+      "balance": 100000.0,
+      "cash": 100000.0
+    },
+    {
+      "date": "2026-01-14",
+      "balance": 100000.0,
+      "cash": 100000.0
+    },
+    {
+      "date": "2026-01-15",
+      "balance": 100000.0,
+      "cash": 100000.0
+    },
+    {
+      "date": "2026-01-16",
+      "balance": 100000.0,
+      "cash": 100000.0
+    },
+    {
+      "date": "2026-01-20",
+      "balance": 100000.0,
+      "cash": 100000.0
+    },
+    {
+      "date": "2026-01-21",
+      "balance": 100000.0,
+      "cash": 100000.0
+    },
+    {
+      "date": "2026-01-22",
+      "balance": 100000.0,
+      "cash": 100000.0
+    },
+    {
+      "date": "2026-01-23",
+      "balance": 100000.0,
+      "cash": 100000.0
+    },
+    {
+      "date": "2026-01-26",
+      "balance": 100000.0,
+      "cash": 100000.0
+    },
+    {
+      "date": "2026-01-27",
+      "balance": 100000.0,
+      "cash": 100000.0
+    },
+    {
+      "date": "2026-01-28",
+      "balance": 100000.0,
+      "cash": 100000.0
+    },
+    {
+      "date": "2026-01-29",
+      "balance": 100000.0,
+      "cash": 100000.0
+    },
+    {
+      "date": "2026-01-30",
+      "balance": 100000.0,
+      "cash": 100000.0
+    },
+    {
+      "date": "2026-02-02",
+      "balance": 100000.0,
+      "cash": 100000.0
+    },
+    {
+      "date": "2026-02-03",
+      "balance": 100000.0,
+      "cash": 100000.0
+    },
+    {
+      "date": "2026-02-04",
+      "balance": 100000.0,
+      "cash": 100000.0
+    },
+    {
+      "date": "2026-02-05",
+      "balance": 100000.0,
+      "cash": 100000.0
+    },
+    {
+      "date": "2026-02-06",
+      "balance": 100000.0,
+      "cash": 100000.0
+    },
+    {
+      "date": "2026-02-09",
+      "balance": 100000.0,
+      "cash": 100000.0
+    },
+    {
+      "date": "2026-02-10",
+      "balance": 100000.0,
+      "cash": 100000.0
+    },
+    {
+      "date": "2026-02-11",
+      "balance": 100000.0,
+      "cash": 100000.0
+    },
+    {
+      "date": "2026-02-12",
+      "balance": 100000.0,
+      "cash": 100000.0
+    },
+    {
+      "date": "2026-02-13",
+      "balance": 100000.0,
+      "cash": 100000.0
+    },
+    {
+      "date": "2026-02-17",
+      "balance": 100000.0,
+      "cash": 100000.0
+    },
+    {
+      "date": "2026-02-18",
+      "balance": 100000.0,
+      "cash": 100000.0
+    },
+    {
+      "date": "2026-02-19",
+      "balance": 100000.0,
+      "cash": 100000.0
+    },
+    {
+      "date": "2026-02-20",
+      "balance": 100000.0,
+      "cash": 100000.0
+    },
+    {
+      "date": "2026-02-23",
+      "balance": 100000.0,
+      "cash": 100000.0
+    },
+    {
+      "date": "2026-02-24",
+      "balance": 100000.0,
+      "cash": 100000.0
+    },
+    {
+      "date": "2026-02-25",
+      "balance": 100000.0,
+      "cash": 100000.0
+    },
+    {
+      "date": "2026-02-26",
+      "balance": 100000.0,
+      "cash": 100000.0
+    },
+    {
+      "date": "2026-02-27",
+      "balance": 100000.0,
+      "cash": 100000.0
+    },
+    {
+      "date": "2026-03-02",
+      "balance": 100000.0,
+      "cash": 100000.0
+    },
+    {
+      "date": "2026-03-03",
+      "balance": 100000.0,
+      "cash": 100000.0
+    },
+    {
+      "date": "2026-03-04",
+      "balance": 100000.0,
+      "cash": 100000.0
+    },
+    {
+      "date": "2026-03-05",
+      "balance": 100000.0,
+      "cash": 100000.0
+    },
+    {
+      "date": "2026-03-06",
+      "balance": 100000.0,
+      "cash": 100000.0
+    },
+    {
+      "date": "2026-03-09",
+      "balance": 100000.0,
+      "cash": 100000.0
+    },
+    {
+      "date": "2026-03-10",
+      "balance": 100000.0,
+      "cash": 100000.0
+    },
+    {
+      "date": "2026-03-11",
+      "balance": 100000.0,
+      "cash": 100000.0
+    },
+    {
+      "date": "2026-03-12",
+      "balance": 100000.0,
+      "cash": 100000.0
+    },
+    {
+      "date": "2026-03-13",
+      "balance": 100000.0,
+      "cash": 100000.0
+    },
+    {
+      "date": "2026-03-16",
+      "balance": 100000.0,
+      "cash": 100000.0
+    },
+    {
+      "date": "2026-03-17",
+      "balance": 100000.0,
+      "cash": 100000.0
+    },
+    {
+      "date": "2026-03-18",
+      "balance": 100000.0,
+      "cash": 100000.0
+    },
+    {
+      "date": "2026-03-19",
+      "balance": 100000.0,
+      "cash": 100000.0
+    },
+    {
+      "date": "2026-03-20",
+      "balance": 100000.0,
+      "cash": 100000.0
+    },
+    {
+      "date": "2026-03-23",
+      "balance": 100000.0,
+      "cash": 100000.0
+    },
+    {
+      "date": "2026-03-24",
+      "balance": 100000.0,
+      "cash": 100000.0
+    },
+    {
+      "date": "2026-03-25",
+      "balance": 100000.0,
+      "cash": 100000.0
+    },
+    {
+      "date": "2026-03-26",
+      "balance": 100000.0,
+      "cash": 100000.0
+    },
+    {
+      "date": "2026-03-27",
+      "balance": 100000.0,
+      "cash": 100000.0
+    },
+    {
+      "date": "2026-03-30",
+      "balance": 100000.0,
+      "cash": 100000.0
+    },
+    {
+      "date": "2026-03-31",
+      "balance": 100000.0,
+      "cash": 100000.0
+    },
+    {
+      "date": "2026-04-01",
+      "balance": 100000.0,
+      "cash": 100000.0
+    },
+    {
+      "date": "2026-04-02",
+      "balance": 100000.0,
+      "cash": 100000.0
+    },
+    {
+      "date": "2026-04-06",
+      "balance": 100000.0,
+      "cash": 100000.0
+    },
+    {
+      "date": "2026-04-07",
+      "balance": 100000.0,
+      "cash": 100000.0
+    },
+    {
+      "date": "2026-04-08",
+      "balance": 100000.0,
+      "cash": 100000.0
+    },
+    {
+      "date": "2026-04-09",
+      "balance": 100000.0,
+      "cash": 100000.0
+    },
+    {
+      "date": "2026-04-10",
+      "balance": 100000.0,
+      "cash": 100000.0
+    },
+    {
+      "date": "2026-04-13",
+      "balance": 100000.0,
+      "cash": 100000.0
+    },
+    {
+      "date": "2026-04-14",
+      "balance": 100000.0,
+      "cash": 100000.0
+    },
+    {
+      "date": "2026-04-15",
+      "balance": 100000.0,
+      "cash": 100000.0
+    },
+    {
+      "date": "2026-04-16",
+      "balance": 100000.0,
+      "cash": 100000.0
+    },
+    {
+      "date": "2026-04-17",
+      "balance": 100000.0,
+      "cash": 100000.0
+    },
+    {
+      "date": "2026-04-20",
+      "balance": 100000.0,
+      "cash": 100000.0
+    },
+    {
+      "date": "2026-04-21",
+      "balance": 100000.0,
+      "cash": 100000.0
+    },
+    {
+      "date": "2026-04-22",
+      "balance": 100000.0,
+      "cash": 100000.0
+    },
+    {
+      "date": "2026-04-23",
+      "balance": 100000.0,
+      "cash": 100000.0
+    },
+    {
+      "date": "2026-04-24",
+      "balance": 100000.0,
+      "cash": 100000.0
+    },
+    {
+      "date": "2026-04-27",
+      "balance": 100000.0,
+      "cash": 100000.0
+    },
+    {
+      "date": "2026-04-28",
+      "balance": 100000.0,
+      "cash": 100000.0
+    },
+    {
+      "date": "2026-04-29",
+      "balance": 100000.0,
+      "cash": 100000.0
+    },
+    {
+      "date": "2026-04-30",
+      "balance": 100000.0,
+      "cash": 100000.0
+    },
+    {
+      "date": "2026-05-01",
+      "balance": 100000.0,
+      "cash": 100000.0
+    },
+    {
+      "date": "2026-05-04",
+      "balance": 100000.0,
+      "cash": 100000.0
+    },
+    {
+      "date": "2026-05-05",
+      "balance": 100000.0,
+      "cash": 100000.0
+    },
+    {
+      "date": "2026-05-06",
+      "balance": 100000.0,
+      "cash": 100000.0
+    },
+    {
+      "date": "2026-05-07",
+      "balance": 100000.0,
+      "cash": 100000.0
+    },
+    {
+      "date": "2026-05-08",
+      "balance": 100000.0,
+      "cash": 100000.0
+    },
+    {
+      "date": "2026-05-11",
+      "balance": 100000.0,
+      "cash": 100000.0
+    },
+    {
+      "date": "2026-05-12",
+      "balance": 100000.0,
+      "cash": 100000.0
+    },
+    {
+      "date": "2026-05-13",
+      "balance": 100000.0,
+      "cash": 100000.0
+    },
+    {
+      "date": "2026-05-14",
+      "balance": 100000.0,
+      "cash": 100000.0
+    },
+    {
+      "date": "2026-05-15",
+      "balance": 100000.0,
+      "cash": 100000.0
+    },
+    {
+      "date": "2026-05-18",
+      "balance": 100000.0,
+      "cash": 100000.0
+    },
+    {
+      "date": "2026-05-19",
+      "balance": 100000.0,
+      "cash": 100000.0
+    },
+    {
+      "date": "2026-05-20",
+      "balance": 100000.0,
+      "cash": 100000.0
+    },
+    {
+      "date": "2026-05-21",
+      "balance": 100000.0,
+      "cash": 100000.0
+    }
+  ],
+  "daily_reviews": [
+    {
+      "date": "2026-01-02",
+      "balance": 100000.0,
+      "cash": 100000.0,
+      "positions": [],
+      "watchlist": [
+        "GOOGL",
+        "NVDA",
+        "AMD"
+      ],
+      "ai_status": "skipped_missing_key",
+      "note": "DeepSeek key missing."
+    },
+    {
+      "date": "2026-01-15",
+      "balance": 100000.0,
+      "cash": 100000.0,
+      "positions": [],
+      "watchlist": [
+        "NVDA",
+        "AMZN",
+        "AMD"
+      ],
+      "ai_status": "skipped_missing_key",
+      "note": "DeepSeek key missing."
+    },
+    {
+      "date": "2026-04-01",
+      "balance": 100000.0,
+      "cash": 100000.0,
+      "positions": [],
+      "watchlist": [
+        "AAPL",
+        "AMZN",
+        "AMD"
+      ],
+      "ai_status": "skipped_missing_key",
+      "note": "DeepSeek key missing."
+    },
+    {
+      "date": "2026-04-15",
+      "balance": 100000.0,
+      "cash": 100000.0,
+      "positions": [],
+      "watchlist": [
+        "NVDA",
+        "TSLA",
+        "AMD"
+      ],
+      "ai_status": "skipped_missing_key",
+      "note": "DeepSeek key missing."
+    },
+    {
+      "date": "2026-05-01",
+      "balance": 100000.0,
+      "cash": 100000.0,
+      "positions": [],
+      "watchlist": [
+        "AAPL",
+        "MSFT",
+        "TSLA"
+      ],
+      "ai_status": "skipped_missing_key",
+      "note": "DeepSeek key missing."
+    },
+    {
+      "date": "2026-05-15",
+      "balance": 100000.0,
+      "cash": 100000.0,
+      "positions": [],
+      "watchlist": [
+        "MSFT",
+        "AAPL",
+        "TSLA"
+      ],
+      "ai_status": "skipped_missing_key",
+      "note": "DeepSeek key missing."
+    },
+    {
+      "date": "2026-05-21",
+      "balance": 100000.0,
+      "cash": 100000.0,
+      "positions": [],
+      "watchlist": [
+        "AAPL",
+        "MSFT",
+        "NVDA"
+      ],
+      "ai_status": "skipped_missing_key",
+      "note": "DeepSeek key missing."
+    }
+  ],
+  "summary": "momentum backtest used DeepSeek daily AI and ended at 100000.0 from 100000.0 with 0 simulated trades.",
+  "ai": {
+    "enabled": true,
+    "deepseek_daily_decisions": [
+      {
+        "date": "2026-01-02",
+        "status": "skipped_missing_key",
+        "order_count": 0,
+        "review": "DeepSeek key missing.",
+        "error": null
+      },
+      {
+        "date": "2026-01-05",
+        "status": "skipped_missing_key",
+        "order_count": 0,
+        "review": "DeepSeek key missing.",
+        "error": null
+      },
+      {
+        "date": "2026-01-06",
+        "status": "skipped_missing_key",
+        "order_count": 0,
+        "review": "DeepSeek key missing.",
+        "error": null
+      },
+      {
+        "date": "2026-01-07",
+        "status": "skipped_missing_key",
+        "order_count": 0,
+        "review": "DeepSeek key missing.",
+        "error": null
+      },
+      {
+        "date": "2026-01-08",
+        "status": "skipped_missing_key",
+        "order_count": 0,
+        "review": "DeepSeek key missing.",
+        "error": null
+      },
+      {
+        "date": "2026-01-09",
+        "status": "skipped_missing_key",
+        "order_count": 0,
+        "review": "DeepSeek key missing.",
+        "error": null
+      },
+      {
+        "date": "2026-01-12",
+        "status": "skipped_missing_key",
+        "order_count": 0,
+        "review": "DeepSeek key missing.",
+        "error": null
+      },
+      {
+        "date": "2026-01-13",
+        "status": "skipped_missing_key",
+        "order_count": 0,
+        "review": "DeepSeek key missing.",
+        "error": null
+      },
+      {
+        "date": "2026-01-14",
+        "status": "skipped_missing_key",
+        "order_count": 0,
+        "review": "DeepSeek key missing.",
+        "error": null
+      },
+      {
+        "date": "2026-01-15",
+        "status": "skipped_missing_key",
+        "order_count": 0,
+        "review": "DeepSeek key missing.",
+        "error": null
+      },
+      {
+        "date": "2026-01-16",
+        "status": "skipped_missing_key",
+        "order_count": 0,
+        "review": "DeepSeek key missing.",
+        "error": null
+      },
+      {
+        "date": "2026-01-20",
+        "status": "skipped_missing_key",
+        "order_count": 0,
+        "review": "DeepSeek key missing.",
+        "error": null
+      },
+      {
+        "date": "2026-01-21",
+        "status": "skipped_missing_key",
+        "order_count": 0,
+        "review": "DeepSeek key missing.",
+        "error": null
+      },
+      {
+        "date": "2026-01-22",
+        "status": "skipped_missing_key",
+        "order_count": 0,
+        "review": "DeepSeek key missing.",
+        "error": null
+      },
+      {
+        "date": "2026-01-23",
+        "status": "skipped_missing_key",
+        "order_count": 0,
+        "review": "DeepSeek key missing.",
+        "error": null
+      },
+      {
+        "date": "2026-01-26",
+        "status": "skipped_missing_key",
+        "order_count": 0,
+        "review": "DeepSeek key missing.",
+        "error": null
+      },
+      {
+        "date": "2026-01-27",
+        "status": "skipped_missing_key",
+        "order_count": 0,
+        "review": "DeepSeek key missing.",
+        "error": null
+      },
+      {
+        "date": "2026-01-28",
+        "status": "skipped_missing_key",
+        "order_count": 0,
+        "review": "DeepSeek key missing.",
+        "error": null
+      },
+      {
+        "date": "2026-01-29",
+        "status": "skipped_missing_key",
+        "order_count": 0,
+        "review": "DeepSeek key missing.",
+        "error": null
+      },
+      {
+        "date": "2026-01-30",
+        "status": "skipped_missing_key",
+        "order_count": 0,
+        "review": "DeepSeek key missing.",
+        "error": null
+      },
+      {
+        "date": "2026-02-02",
+        "status": "skipped_missing_key",
+        "order_count": 0,
+        "review": "DeepSeek key missing.",
+        "error": null
+      },
+      {
+        "date": "2026-02-03",
+        "status": "skipped_missing_key",
+        "order_count": 0,
+        "review": "DeepSeek key missing.",
+        "error": null
+      },
+      {
+        "date": "2026-02-04",
+        "status": "skipped_missing_key",
+        "order_count": 0,
+        "review": "DeepSeek key missing.",
+        "error": null
+      },
+      {
+        "date": "2026-02-05",
+        "status": "skipped_missing_key",
+        "order_count": 0,
+        "review": "DeepSeek key missing.",
+        "error": null
+      },
+      {
+        "date": "2026-02-06",
+        "status": "skipped_missing_key",
+        "order_count": 0,
+        "review": "DeepSeek key missing.",
+        "error": null
+      },
+      {
+        "date": "2026-02-09",
+        "status": "skipped_missing_key",
+        "order_count": 0,
+        "review": "DeepSeek key missing.",
+        "error": null
+      },
+      {
+        "date": "2026-02-10",
+        "status": "skipped_missing_key",
+        "order_count": 0,
+        "review": "DeepSeek key missing.",
+        "error": null
+      },
+      {
+        "date": "2026-02-11",
+        "status": "skipped_missing_key",
+        "order_count": 0,
+        "review": "DeepSeek key missing.",
+        "error": null
+      },
+      {
+        "date": "2026-02-12",
+        "status": "skipped_missing_key",
+        "order_count": 0,
+        "review": "DeepSeek key missing.",
+        "error": null
+      },
+      {
+        "date": "2026-02-13",
+        "status": "skipped_missing_key",
+        "order_count": 0,
+        "review": "DeepSeek key missing.",
+        "error": null
+      },
+      {
+        "date": "2026-02-17",
+        "status": "skipped_missing_key",
+        "order_count": 0,
+        "review": "DeepSeek key missing.",
+        "error": null
+      },
+      {
+        "date": "2026-02-18",
+        "status": "skipped_missing_key",
+        "order_count": 0,
+        "review": "DeepSeek key missing.",
+        "error": null
+      },
+      {
+        "date": "2026-02-19",
+        "status": "skipped_missing_key",
+        "order_count": 0,
+        "review": "DeepSeek key missing.",
+        "error": null
+      },
+      {
+        "date": "2026-02-20",
+        "status": "skipped_missing_key",
+        "order_count": 0,
+        "review": "DeepSeek key missing.",
+        "error": null
+      },
+      {
+        "date": "2026-02-23",
+        "status": "skipped_missing_key",
+        "order_count": 0,
+        "review": "DeepSeek key missing.",
+        "error": null
+      },
+      {
+        "date": "2026-02-24",
+        "status": "skipped_missing_key",
+        "order_count": 0,
+        "review": "DeepSeek key missing.",
+        "error": null
+      },
+      {
+        "date": "2026-02-25",
+        "status": "skipped_missing_key",
+        "order_count": 0,
+        "review": "DeepSeek key missing.",
+        "error": null
+      },
+      {
+        "date": "2026-02-26",
+        "status": "skipped_missing_key",
+        "order_count": 0,
+        "review": "DeepSeek key missing.",
+        "error": null
+      },
+      {
+        "date": "2026-02-27",
+        "status": "skipped_missing_key",
+        "order_count": 0,
+        "review": "DeepSeek key missing.",
+        "error": null
+      },
+      {
+        "date": "2026-03-02",
+        "status": "skipped_missing_key",
+        "order_count": 0,
+        "review": "DeepSeek key missing.",
+        "error": null
+      },
+      {
+        "date": "2026-03-03",
+        "status": "skipped_missing_key",
+        "order_count": 0,
+        "review": "DeepSeek key missing.",
+        "error": null
+      },
+      {
+        "date": "2026-03-04",
+        "status": "skipped_missing_key",
+        "order_count": 0,
+        "review": "DeepSeek key missing.",
+        "error": null
+      },
+      {
+        "date": "2026-03-05",
+        "status": "skipped_missing_key",
+        "order_count": 0,
+        "review": "DeepSeek key missing.",
+        "error": null
+      },
+      {
+        "date": "2026-03-06",
+        "status": "skipped_missing_key",
+        "order_count": 0,
+        "review": "DeepSeek key missing.",
+        "error": null
+      },
+      {
+        "date": "2026-03-09",
+        "status": "skipped_missing_key",
+        "order_count": 0,
+        "review": "DeepSeek key missing.",
+        "error": null
+      },
+      {
+        "date": "2026-03-10",
+        "status": "skipped_missing_key",
+        "order_count": 0,
+        "review": "DeepSeek key missing.",
+        "error": null
+      },
+      {
+        "date": "2026-03-11",
+        "status": "skipped_missing_key",
+        "order_count": 0,
+        "review": "DeepSeek key missing.",
+        "error": null
+      },
+      {
+        "date": "2026-03-12",
+        "status": "skipped_missing_key",
+        "order_count": 0,
+        "review": "DeepSeek key missing.",
+        "error": null
+      },
+      {
+        "date": "2026-03-13",
+        "status": "skipped_missing_key",
+        "order_count": 0,
+        "review": "DeepSeek key missing.",
+        "error": null
+      },
+      {
+        "date": "2026-03-16",
+        "status": "skipped_missing_key",
+        "order_count": 0,
+        "review": "DeepSeek key missing.",
+        "error": null
+      },
+      {
+        "date": "2026-03-17",
+        "status": "skipped_missing_key",
+        "order_count": 0,
+        "review": "DeepSeek key missing.",
+        "error": null
+      },
+      {
+        "date": "2026-03-18",
+        "status": "skipped_missing_key",
+        "order_count": 0,
+        "review": "DeepSeek key missing.",
+        "error": null
+      },
+      {
+        "date": "2026-03-19",
+        "status": "skipped_missing_key",
+        "order_count": 0,
+        "review": "DeepSeek key missing.",
+        "error": null
+      },
+      {
+        "date": "2026-03-20",
+        "status": "skipped_missing_key",
+        "order_count": 0,
+        "review": "DeepSeek key missing.",
+        "error": null
+      },
+      {
+        "date": "2026-03-23",
+        "status": "skipped_missing_key",
+        "order_count": 0,
+        "review": "DeepSeek key missing.",
+        "error": null
+      },
+      {
+        "date": "2026-03-24",
+        "status": "skipped_missing_key",
+        "order_count": 0,
+        "review": "DeepSeek key missing.",
+        "error": null
+      },
+      {
+        "date": "2026-03-25",
+        "status": "skipped_missing_key",
+        "order_count": 0,
+        "review": "DeepSeek key missing.",
+        "error": null
+      },
+      {
+        "date": "2026-03-26",
+        "status": "skipped_missing_key",
+        "order_count": 0,
+        "review": "DeepSeek key missing.",
+        "error": null
+      },
+      {
+        "date": "2026-03-27",
+        "status": "skipped_missing_key",
+        "order_count": 0,
+        "review": "DeepSeek key missing.",
+        "error": null
+      },
+      {
+        "date": "2026-03-30",
+        "status": "skipped_missing_key",
+        "order_count": 0,
+        "review": "DeepSeek key missing.",
+        "error": null
+      },
+      {
+        "date": "2026-03-31",
+        "status": "skipped_missing_key",
+        "order_count": 0,
+        "review": "DeepSeek key missing.",
+        "error": null
+      },
+      {
+        "date": "2026-04-01",
+        "status": "skipped_missing_key",
+        "order_count": 0,
+        "review": "DeepSeek key missing.",
+        "error": null
+      },
+      {
+        "date": "2026-04-02",
+        "status": "skipped_missing_key",
+        "order_count": 0,
+        "review": "DeepSeek key missing.",
+        "error": null
+      },
+      {
+        "date": "2026-04-06",
+        "status": "skipped_missing_key",
+        "order_count": 0,
+        "review": "DeepSeek key missing.",
+        "error": null
+      },
+      {
+        "date": "2026-04-07",
+        "status": "skipped_missing_key",
+        "order_count": 0,
+        "review": "DeepSeek key missing.",
+        "error": null
+      },
+      {
+        "date": "2026-04-08",
+        "status": "skipped_missing_key",
+        "order_count": 0,
+        "review": "DeepSeek key missing.",
+        "error": null
+      },
+      {
+        "date": "2026-04-09",
+        "status": "skipped_missing_key",
+        "order_count": 0,
+        "review": "DeepSeek key missing.",
+        "error": null
+      },
+      {
+        "date": "2026-04-10",
+        "status": "skipped_missing_key",
+        "order_count": 0,
+        "review": "DeepSeek key missing.",
+        "error": null
+      },
+      {
+        "date": "2026-04-13",
+        "status": "skipped_missing_key",
+        "order_count": 0,
+        "review": "DeepSeek key missing.",
+        "error": null
+      },
+      {
+        "date": "2026-04-14",
+        "status": "skipped_missing_key",
+        "order_count": 0,
+        "review": "DeepSeek key missing.",
+        "error": null
+      },
+      {
+        "date": "2026-04-15",
+        "status": "skipped_missing_key",
+        "order_count": 0,
+        "review": "DeepSeek key missing.",
+        "error": null
+      },
+      {
+        "date": "2026-04-16",
+        "status": "skipped_missing_key",
+        "order_count": 0,
+        "review": "DeepSeek key missing.",
+        "error": null
+      },
+      {
+        "date": "2026-04-17",
+        "status": "skipped_missing_key",
+        "order_count": 0,
+        "review": "DeepSeek key missing.",
+        "error": null
+      },
+      {
+        "date": "2026-04-20",
+        "status": "skipped_missing_key",
+        "order_count": 0,
+        "review": "DeepSeek key missing.",
+        "error": null
+      },
+      {
+        "date": "2026-04-21",
+        "status": "skipped_missing_key",
+        "order_count": 0,
+        "review": "DeepSeek key missing.",
+        "error": null
+      },
+      {
+        "date": "2026-04-22",
+        "status": "skipped_missing_key",
+        "order_count": 0,
+        "review": "DeepSeek key missing.",
+        "error": null
+      },
+      {
+        "date": "2026-04-23",
+        "status": "skipped_missing_key",
+        "order_count": 0,
+        "review": "DeepSeek key missing.",
+        "error": null
+      },
+      {
+        "date": "2026-04-24",
+        "status": "skipped_missing_key",
+        "order_count": 0,
+        "review": "DeepSeek key missing.",
+        "error": null
+      },
+      {
+        "date": "2026-04-27",
+        "status": "skipped_missing_key",
+        "order_count": 0,
+        "review": "DeepSeek key missing.",
+        "error": null
+      },
+      {
+        "date": "2026-04-28",
+        "status": "skipped_missing_key",
+        "order_count": 0,
+        "review": "DeepSeek key missing.",
+        "error": null
+      },
+      {
+        "date": "2026-04-29",
+        "status": "skipped_missing_key",
+        "order_count": 0,
+        "review": "DeepSeek key missing.",
+        "error": null
+      },
+      {
+        "date": "2026-04-30",
+        "status": "skipped_missing_key",
+        "order_count": 0,
+        "review": "DeepSeek key missing.",
+        "error": null
+      },
+      {
+        "date": "2026-05-01",
+        "status": "skipped_missing_key",
+        "order_count": 0,
+        "review": "DeepSeek key missing.",
+        "error": null
+      },
+      {
+        "date": "2026-05-04",
+        "status": "skipped_missing_key",
+        "order_count": 0,
+        "review": "DeepSeek key missing.",
+        "error": null
+      },
+      {
+        "date": "2026-05-05",
+        "status": "skipped_missing_key",
+        "order_count": 0,
+        "review": "DeepSeek key missing.",
+        "error": null
+      },
+      {
+        "date": "2026-05-06",
+        "status": "skipped_missing_key",
+        "order_count": 0,
+        "review": "DeepSeek key missing.",
+        "error": null
+      },
+      {
+        "date": "2026-05-07",
+        "status": "skipped_missing_key",
+        "order_count": 0,
+        "review": "DeepSeek key missing.",
+        "error": null
+      },
+      {
+        "date": "2026-05-08",
+        "status": "skipped_missing_key",
+        "order_count": 0,
+        "review": "DeepSeek key missing.",
+        "error": null
+      },
+      {
+        "date": "2026-05-11",
+        "status": "skipped_missing_key",
+        "order_count": 0,
+        "review": "DeepSeek key missing.",
+        "error": null
+      },
+      {
+        "date": "2026-05-12",
+        "status": "skipped_missing_key",
+        "order_count": 0,
+        "review": "DeepSeek key missing.",
+        "error": null
+      },
+      {
+        "date": "2026-05-13",
+        "status": "skipped_missing_key",
+        "order_count": 0,
+        "review": "DeepSeek key missing.",
+        "error": null
+      },
+      {
+        "date": "2026-05-14",
+        "status": "skipped_missing_key",
+        "order_count": 0,
+        "review": "DeepSeek key missing.",
+        "error": null
+      },
+      {
+        "date": "2026-05-15",
+        "status": "skipped_missing_key",
+        "order_count": 0,
+        "review": "DeepSeek key missing.",
+        "error": null
+      },
+      {
+        "date": "2026-05-18",
+        "status": "skipped_missing_key",
+        "order_count": 0,
+        "review": "DeepSeek key missing.",
+        "error": null
+      },
+      {
+        "date": "2026-05-19",
+        "status": "skipped_missing_key",
+        "order_count": 0,
+        "review": "DeepSeek key missing.",
+        "error": null
+      },
+      {
+        "date": "2026-05-20",
+        "status": "skipped_missing_key",
+        "order_count": 0,
+        "review": "DeepSeek key missing.",
+        "error": null
+      },
+      {
+        "date": "2026-05-21",
+        "status": "skipped_missing_key",
+        "order_count": 0,
+        "review": "DeepSeek key missing.",
+        "error": null
+      }
+    ],
+    "deepseek_ok_days": 0,
+    "deepseek_error_days": 0,
+    "deepseek_skipped_days": 97,
+    "openai_review": null
+  }
+}

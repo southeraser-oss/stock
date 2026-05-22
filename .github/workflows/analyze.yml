@@ -1,0 +1,93 @@
+name: Analyze Stocks
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  analyze-and-deploy:
+    runs-on: ubuntu-latest
+
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run analysis
+        env:
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          USE_OPENAI_PREMIUM: ${{ vars.USE_OPENAI_PREMIUM || 'auto' }}
+          STOCK_SYMBOLS: ${{ vars.STOCK_SYMBOLS || 'auto' }}
+          MAX_SYMBOLS: ${{ vars.MAX_SYMBOLS || '35' }}
+          ENABLE_YFINANCE_SCREENERS: ${{ vars.ENABLE_YFINANCE_SCREENERS || 'true' }}
+          SCREENER_COUNT: ${{ vars.SCREENER_COUNT || '12' }}
+          MODEL_DEEPSEEK: ${{ vars.MODEL_DEEPSEEK || 'deepseek-chat' }}
+          MODEL_OPENAI: ${{ vars.MODEL_OPENAI || 'gpt-4.1-mini' }}
+          DEEPSEEK_MAX_TOKENS: ${{ vars.DEEPSEEK_MAX_TOKENS || '900' }}
+          OPENAI_MAX_OUTPUT_TOKENS: ${{ vars.OPENAI_MAX_OUTPUT_TOKENS || '1200' }}
+          PAPER_CASH_DELTA: ${{ vars.PAPER_CASH_DELTA || '0' }}
+          PAPER_CASH_DELTA_ID: ${{ vars.PAPER_CASH_DELTA_ID || 'default' }}
+          PAPER_MAX_POSITIONS: ${{ vars.PAPER_MAX_POSITIONS || '4' }}
+          PAPER_ALLOCATION_PCT: ${{ vars.PAPER_ALLOCATION_PCT || '0.24' }}
+          PAPER_FEE_BPS: ${{ vars.PAPER_FEE_BPS || '2' }}
+          PAPER_TRADING_ENABLED: ${{ vars.PAPER_TRADING_ENABLED || 'true' }}
+          PAPER_FORCE_LIQUIDATE: ${{ vars.PAPER_FORCE_LIQUIDATE || 'false' }}
+          ENABLE_TRADING_SKILLS: ${{ vars.ENABLE_TRADING_SKILLS || 'true' }}
+          TRADING_SKILLS_MAX_CHARS: ${{ vars.TRADING_SKILLS_MAX_CHARS || '6000' }}
+          HISTORY_PERIOD: ${{ vars.HISTORY_PERIOD || '2y' }}
+          BACKTEST_START_DATE: ${{ vars.BACKTEST_START_DATE || '2026-01-01' }}
+          BACKTEST_END_DATE: ${{ vars.BACKTEST_END_DATE || '' }}
+          BACKTEST_STYLE: ${{ vars.BACKTEST_STYLE || 'momentum' }}
+          BACKTEST_INITIAL_CAPITAL: ${{ vars.BACKTEST_INITIAL_CAPITAL || '100000' }}
+          BACKTEST_MAX_POSITIONS: ${{ vars.BACKTEST_MAX_POSITIONS || '5' }}
+          BACKTEST_ALLOCATION_PCT: ${{ vars.BACKTEST_ALLOCATION_PCT || '0.2' }}
+          AI_BACKTEST_ENABLED: ${{ vars.AI_BACKTEST_ENABLED || 'true' }}
+          AI_DAILY_CANDIDATE_LIMIT: ${{ vars.AI_DAILY_CANDIDATE_LIMIT || '12' }}
+          DEEPSEEK_DAILY_MAX_TOKENS: ${{ vars.DEEPSEEK_DAILY_MAX_TOKENS || '700' }}
+          AI_BUY_MIN_CONFIDENCE: ${{ vars.AI_BUY_MIN_CONFIDENCE || '0.55' }}
+          OPENAI_BACKTEST_MAX_OUTPUT_TOKENS: ${{ vars.OPENAI_BACKTEST_MAX_OUTPUT_TOKENS || '1200' }}
+        run: python src/analyze.py
+
+      - name: Persist paper state
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/data/paper_state.json
+          git add docs/data/ledger.json
+          git diff --cached --quiet || git commit -m "Update paper trading state"
+          git push
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

@@ -1,0 +1,654 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Paper Trading Dashboard</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f5f6f8;
+      --panel: #ffffff;
+      --text: #17202a;
+      --muted: #667085;
+      --line: #d7dde5;
+      --green: #137a4b;
+      --red: #b42318;
+      --amber: #9a6500;
+      --blue: #255a9b;
+      --ink: #253041;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+    header {
+      padding: 24px clamp(16px, 4vw, 44px) 18px;
+      border-bottom: 1px solid var(--line);
+      background: var(--panel);
+    }
+    h1 { margin: 0 0 8px; font-size: clamp(26px, 4vw, 40px); letter-spacing: 0; }
+    .subhead { color: var(--muted); margin: 0; max-width: 920px; line-height: 1.5; }
+    main { padding: 22px clamp(16px, 4vw, 44px) 44px; display: grid; gap: 18px; }
+    .toolbar { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; }
+    .status { color: var(--muted); font-size: 14px; line-height: 1.45; }
+    button {
+      border: 1px solid var(--line);
+      background: var(--panel);
+      color: var(--text);
+      border-radius: 8px;
+      padding: 9px 13px;
+      cursor: pointer;
+      font: inherit;
+    }
+    input, select {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 9px 10px;
+      font: inherit;
+      min-width: 130px;
+    }
+    .control-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+    .primary-action { background: var(--ink); color: #fff; border-color: var(--ink); }
+    .danger-action { color: var(--red); border-color: #efb4ad; }
+    .tabs { display: flex; gap: 8px; flex-wrap: wrap; }
+    .tab[aria-selected="true"] { border-color: var(--ink); background: var(--ink); color: #fff; }
+    .summary { display: grid; grid-template-columns: repeat(4, minmax(150px, 1fr)); gap: 12px; }
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 16px;
+    }
+    .metric-label { color: var(--muted); font-size: 13px; margin-bottom: 8px; }
+    .metric-value { font-size: clamp(24px, 3vw, 34px); font-weight: 750; font-variant-numeric: tabular-nums; }
+    .positive { color: var(--green); }
+    .negative { color: var(--red); }
+    .layout { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.8fr); gap: 14px; }
+    h2 { margin: 0 0 12px; font-size: 18px; letter-spacing: 0; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { border-top: 1px solid var(--line); padding: 10px 8px; text-align: left; font-size: 14px; vertical-align: top; }
+    th { color: var(--muted); font-weight: 600; }
+    td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+    .badge { border-radius: 999px; padding: 4px 9px; font-size: 12px; text-transform: uppercase; display: inline-block; }
+    .BUY, .bullish { background: #e3f5eb; color: var(--green); }
+    .SELL, .bearish { background: #fae5e5; color: var(--red); }
+    .neutral { background: #f6edd8; color: var(--amber); }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; }
+    .calendar { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; }
+    .calendar-day { min-height: 132px; }
+    .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; align-items: end; }
+    .stock-card { min-height: 168px; }
+    .symbol { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+    .symbol strong { font-size: 20px; }
+    .line { display: flex; justify-content: space-between; gap: 12px; border-top: 1px solid var(--line); padding: 8px 0; }
+    .line span:first-child { color: var(--muted); }
+    pre {
+      white-space: pre-wrap;
+      word-break: break-word;
+      margin: 0;
+      background: #f0f3f7;
+      border-radius: 8px;
+      padding: 14px;
+      color: #243447;
+      max-height: 520px;
+      overflow: auto;
+    }
+    .sparkline { width: 100%; height: 130px; display: block; }
+    .empty { color: var(--muted); padding: 16px 0; }
+    .error { color: var(--red); }
+    [hidden] { display: none !important; }
+    @media (max-width: 900px) {
+      .summary { grid-template-columns: repeat(2, minmax(140px, 1fr)); }
+      .layout { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 560px) {
+      header { padding-top: 22px; }
+      main { padding-top: 18px; }
+      .summary { grid-template-columns: 1fr; }
+      th, td { padding: 9px 6px; font-size: 13px; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Paper Trading Dashboard</h1>
+    <p class="subhead">Automated stock screening with simulated trading, portfolio accounting, and LLM-assisted review. This is analysis and paper trading only, not real-money execution.</p>
+  </header>
+  <main>
+    <section class="toolbar">
+      <div class="status" id="status">Loading latest paper-trading run...</div>
+      <button type="button" id="refresh">Refresh</button>
+    </section>
+
+    <section class="summary" id="summary"></section>
+
+    <section class="panel">
+      <h2>Paper Controls</h2>
+      <div class="control-row">
+        <input id="fundAmount" type="number" min="0" step="1000" value="10000" aria-label="Funds to add">
+        <button type="button" id="addFunds">Add Funds</button>
+        <button type="button" id="withdrawFunds">Withdraw</button>
+        <button type="button" id="toggleTrading" class="primary-action">Pause Simulation</button>
+        <button type="button" id="sellAll" class="danger-action">Sell All</button>
+        <button type="button" id="resetLocal">Reset Local Controls</button>
+      </div>
+      <p class="status" id="controlStatus"></p>
+    </section>
+
+    <section class="tabs" role="tablist" aria-label="Dashboard views">
+      <button class="tab" type="button" data-tab="overview" aria-selected="true">Overview</button>
+      <button class="tab" type="button" data-tab="holdings" aria-selected="false">Holdings</button>
+      <button class="tab" type="button" data-tab="trades" aria-selected="false">Trades</button>
+      <button class="tab" type="button" data-tab="backtest" aria-selected="false">Backtest</button>
+      <button class="tab" type="button" data-tab="ledger" aria-selected="false">Review Ledger</button>
+      <button class="tab" type="button" data-tab="analysis" aria-selected="false">Analysis</button>
+    </section>
+
+    <section id="overview" class="view layout">
+      <article class="panel">
+        <h2>Equity Curve</h2>
+        <svg class="sparkline" id="sparkline" role="img" aria-label="Portfolio equity curve"></svg>
+      </article>
+      <article class="panel">
+        <h2>Strategy</h2>
+        <div id="strategy" class="status"></div>
+      </article>
+    </section>
+
+    <section id="holdings" class="view panel" hidden>
+      <h2>Current Holdings</h2>
+      <div id="holdingsTable"></div>
+    </section>
+
+    <section id="trades" class="view panel" hidden>
+      <h2>Trade History</h2>
+      <div id="tradesTable"></div>
+    </section>
+
+    <section id="backtest" class="view" hidden>
+      <article class="panel">
+        <h2>Backtest Lab</h2>
+        <div class="form-grid">
+          <label class="status">Start date<input id="btStart" type="date"></label>
+          <label class="status">End date<input id="btEnd" type="date"></label>
+          <label class="status">Style
+            <select id="btStyle">
+              <option value="momentum">Momentum</option>
+              <option value="growth">Growth</option>
+              <option value="conservative">Conservative</option>
+              <option value="high_volatility">High volatility</option>
+            </select>
+          </label>
+          <label class="status">Initial capital<input id="btCapital" type="number" min="0" step="1000" value="100000"></label>
+          <button type="button" id="runBacktest" class="primary-action">Run Backtest</button>
+        </div>
+        <div id="backtestResult" class="status"></div>
+      </article>
+      <article class="panel">
+        <h2>Scheduled AI Backtest</h2>
+        <div id="serverBacktest"></div>
+      </article>
+    </section>
+
+    <section id="ledger" class="view panel" hidden>
+      <h2>Review Calendar</h2>
+      <div class="calendar" id="ledgerCalendar"></div>
+    </section>
+
+    <section id="analysis" class="view" hidden>
+      <div class="layout">
+        <article class="panel">
+          <h2>Watchlist Signals</h2>
+          <div class="grid" id="cards"></div>
+        </article>
+        <article class="panel">
+          <h2>LLM Review</h2>
+          <pre id="llm">No LLM analysis loaded.</pre>
+        </article>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const statusEl = document.querySelector("#status");
+    const summaryEl = document.querySelector("#summary");
+    const cards = document.querySelector("#cards");
+    const llmEl = document.querySelector("#llm");
+    const refresh = document.querySelector("#refresh");
+    const fundAmount = document.querySelector("#fundAmount");
+    const addFunds = document.querySelector("#addFunds");
+    const withdrawFunds = document.querySelector("#withdrawFunds");
+    const toggleTrading = document.querySelector("#toggleTrading");
+    const sellAll = document.querySelector("#sellAll");
+    const resetLocal = document.querySelector("#resetLocal");
+    const runBacktest = document.querySelector("#runBacktest");
+    const btStart = document.querySelector("#btStart");
+    const btEnd = document.querySelector("#btEnd");
+    const btStyle = document.querySelector("#btStyle");
+    const btCapital = document.querySelector("#btCapital");
+    const backtestResult = document.querySelector("#backtestResult");
+    const serverBacktest = document.querySelector("#serverBacktest");
+    const ledgerCalendar = document.querySelector("#ledgerCalendar");
+    const controlStatus = document.querySelector("#controlStatus");
+    const holdingsTable = document.querySelector("#holdingsTable");
+    const tradesTable = document.querySelector("#tradesTable");
+    const strategyEl = document.querySelector("#strategy");
+    const sparkline = document.querySelector("#sparkline");
+    const tabs = document.querySelectorAll(".tab");
+    const views = document.querySelectorAll(".view");
+    const localStateKey = "paperTradingControls";
+    let latestData = null;
+    let historyData = null;
+    let ledgerData = null;
+
+    function money(value) {
+      if (value === null || value === undefined || Number.isNaN(value)) return "n/a";
+      return Number(value).toLocaleString(undefined, { style: "currency", currency: "USD", maximumFractionDigits: 2 });
+    }
+
+    function num(value, suffix = "") {
+      if (value === null || value === undefined || Number.isNaN(value)) return "n/a";
+      return `${Number(value).toLocaleString(undefined, { maximumFractionDigits: 2 })}${suffix}`;
+    }
+
+    function signedClass(value) {
+      return Number(value) >= 0 ? "positive" : "negative";
+    }
+
+    function readLocalState() {
+      try {
+        return JSON.parse(localStorage.getItem(localStateKey)) || {};
+      } catch {
+        return {};
+      }
+    }
+
+    function writeLocalState(nextState) {
+      localStorage.setItem(localStateKey, JSON.stringify(nextState));
+      renderDashboard(latestData);
+    }
+
+    function applyLocalControls(portfolio) {
+      const state = readLocalState();
+      const copy = structuredClone(portfolio || {});
+      copy.holdings = copy.holdings || [];
+      copy.trade_history = copy.trade_history || [];
+      copy.cash = Math.max(0, Number(copy.cash || 0) + Number(state.addedFunds || 0) - Number(state.withdrawnFunds || 0));
+      copy.balance = Math.max(0, Number(copy.balance || 0) + Number(state.addedFunds || 0) - Number(state.withdrawnFunds || 0));
+      copy.local_trading_paused = Boolean(state.paused);
+
+      if (state.liquidatedAt && copy.holdings.length > 0) {
+        const liquidatedValue = copy.holdings.reduce((sum, row) => sum + Number(row.market_value || 0), 0);
+        copy.cash += liquidatedValue;
+        copy.balance = copy.cash;
+        const syntheticTrades = copy.holdings.map(row => ({
+          date: state.liquidatedAt,
+          symbol: row.symbol,
+          side: "SELL",
+          shares: row.shares,
+          price: row.current_price,
+          fee: 0,
+          pnl: row.unrealized_pnl,
+          reason: "Local dashboard sell-all control",
+        }));
+        copy.trade_history = [...copy.trade_history, ...syntheticTrades];
+        copy.holdings = [];
+      }
+
+      if (copy.initial_balance) {
+        copy.total_return_pct = ((copy.balance / copy.initial_balance) - 1) * 100;
+      }
+
+      return copy;
+    }
+
+    function renderControlStatus(portfolio) {
+      const state = readLocalState();
+      toggleTrading.textContent = state.paused ? "Start Simulation" : "Pause Simulation";
+      const parts = [
+        state.paused ? "Local display is paused." : "Local display is active.",
+        state.addedFunds ? `Added local funds: ${money(state.addedFunds)}.` : "",
+        state.withdrawnFunds ? `Withdrawn locally: ${money(state.withdrawnFunds)}.` : "",
+        state.liquidatedAt ? `Local sell-all applied at ${state.liquidatedAt}.` : "",
+        "GitHub Actions still controls the scheduled server-side run; persist changes there with repo variables.",
+      ].filter(Boolean);
+      controlStatus.textContent = parts.join(" ");
+    }
+
+    function renderSummary(portfolio) {
+      const items = [
+        ["Balance", money(portfolio.balance)],
+        ["Cash", money(portfolio.cash)],
+        ["Total Return", num(portfolio.total_return_pct, "%"), signedClass(portfolio.total_return_pct)],
+        ["Holdings", String((portfolio.holdings || []).length)],
+      ];
+      summaryEl.innerHTML = items.map(([label, value, cls = ""]) => `
+        <article class="panel">
+          <div class="metric-label">${label}</div>
+          <div class="metric-value ${cls}">${value}</div>
+        </article>
+      `).join("");
+    }
+
+    function renderDashboard(data) {
+      if (!data) return;
+      const portfolio = applyLocalControls(data.portfolio || {});
+      renderSummary(portfolio);
+      renderStrategy(portfolio);
+      renderSparkline(portfolio.equity_curve || []);
+      renderHoldings(portfolio.holdings || []);
+      renderTrades(portfolio.trade_history || []);
+      renderControlStatus(portfolio);
+      renderServerBacktest(data.backtest || {});
+      renderLedger(data.ledger || ledgerData || {});
+      cards.innerHTML = (data.stocks || []).map(renderCard).join("");
+      llmEl.textContent = JSON.stringify(data.llm_analysis || {}, null, 2);
+    }
+
+    function renderServerBacktest(backtest) {
+      if (!backtest || !backtest.start_date) {
+        serverBacktest.innerHTML = `<div class="empty">No scheduled backtest result yet.</div>`;
+        return;
+      }
+      serverBacktest.innerHTML = `
+        <div class="summary">
+          <article class="panel"><div class="metric-label">Period</div><div>${backtest.start_date} to ${backtest.end_date}</div></article>
+          <article class="panel"><div class="metric-label">Style / Engine</div><div>${backtest.style} / ${backtest.engine || "n/a"}</div></article>
+          <article class="panel"><div class="metric-label">Ending Balance</div><div class="metric-value">${money(backtest.ending_balance)}</div></article>
+          <article class="panel"><div class="metric-label">Return</div><div class="metric-value ${signedClass(backtest.total_return_pct)}">${num(backtest.total_return_pct, "%")}</div></article>
+        </div>
+        <div class="line"><span>DeepSeek days</span><strong>${backtest.ai?.deepseek_ok_days ?? 0} ok / ${backtest.ai?.deepseek_skipped_days ?? 0} skipped / ${backtest.ai?.deepseek_error_days ?? 0} error</strong></div>
+        <div class="line"><span>OpenAI review</span><strong>${backtest.ai?.openai_review?.status || "not available"}</strong></div>
+        <p>${backtest.summary || ""}</p>
+      `;
+    }
+
+    function renderLedger(ledger) {
+      const entries = (ledger.entries || []).slice().reverse();
+      if (!entries.length) {
+        ledgerCalendar.innerHTML = `<div class="empty">No review entries yet.</div>`;
+        return;
+      }
+      ledgerCalendar.innerHTML = entries.map(entry => `
+        <article class="panel calendar-day">
+          <strong>${entry.date}</strong>
+          <div class="status">${entry.title || "Review"}</div>
+          <div class="line"><span>Portfolio</span><strong>${num(entry.portfolio_return_pct, "%")}</strong></div>
+          <div class="line"><span>Backtest</span><strong>${num(entry.backtest_return_pct, "%")}</strong></div>
+          <p class="status">${entry.review || ""}</p>
+        </article>
+      `).join("");
+    }
+
+    function renderStrategy(portfolio) {
+      const strategy = portfolio.strategy || {};
+      strategyEl.innerHTML = `
+        <div class="line"><span>Max positions</span><strong>${strategy.max_positions ?? "n/a"}</strong></div>
+        <div class="line"><span>Allocation per entry</span><strong>${num((strategy.allocation_pct || 0) * 100, "%")}</strong></div>
+        <div class="line"><span>Fee</span><strong>${strategy.fee_bps ?? "n/a"} bps</strong></div>
+        <p>${strategy.buy_logic || strategy.note || ""}</p>
+        <p>${strategy.sell_logic || ""}</p>
+      `;
+    }
+
+    function renderSparkline(curve) {
+      sparkline.innerHTML = "";
+      if (!curve || curve.length < 2) {
+        sparkline.innerHTML = `<text x="10" y="70" fill="#667085">Not enough equity history.</text>`;
+        return;
+      }
+      const width = sparkline.clientWidth || 720;
+      const height = 130;
+      const values = curve.map(row => Number(row.balance));
+      const min = Math.min(...values);
+      const max = Math.max(...values);
+      const spread = Math.max(max - min, 1);
+      const points = values.map((value, index) => {
+        const x = (index / (values.length - 1)) * width;
+        const y = height - 18 - ((value - min) / spread) * (height - 36);
+        return `${x.toFixed(1)},${y.toFixed(1)}`;
+      }).join(" ");
+      sparkline.setAttribute("viewBox", `0 0 ${width} ${height}`);
+      sparkline.innerHTML = `
+        <polyline points="${points}" fill="none" stroke="#255a9b" stroke-width="3" />
+        <text x="4" y="18" fill="#667085">${money(values[0])}</text>
+        <text x="${Math.max(width - 128, 4)}" y="18" fill="#667085">${money(values.at(-1))}</text>
+      `;
+    }
+
+    function renderHoldings(rows) {
+      if (!rows || rows.length === 0) {
+        holdingsTable.innerHTML = `<div class="empty">No open positions right now.</div>`;
+        return;
+      }
+      holdingsTable.innerHTML = `
+        <table>
+          <thead><tr><th>Symbol</th><th class="num">Shares</th><th class="num">Avg</th><th class="num">Current</th><th class="num">Value</th><th class="num">Unrealized</th><th>Opened</th></tr></thead>
+          <tbody>${rows.map(row => `
+            <tr>
+              <td><strong>${row.symbol}</strong></td>
+              <td class="num">${num(row.shares)}</td>
+              <td class="num">${money(row.avg_price)}</td>
+              <td class="num">${money(row.current_price)}</td>
+              <td class="num">${money(row.market_value)}</td>
+              <td class="num ${signedClass(row.unrealized_pnl)}">${money(row.unrealized_pnl)} (${num(row.unrealized_return_pct, "%")})</td>
+              <td>${row.opened_at}</td>
+            </tr>
+          `).join("")}</tbody>
+        </table>
+      `;
+    }
+
+    function renderTrades(rows) {
+      if (!rows || rows.length === 0) {
+        tradesTable.innerHTML = `<div class="empty">No simulated trades have been generated yet.</div>`;
+        return;
+      }
+      tradesTable.innerHTML = `
+        <table>
+          <thead><tr><th>Date</th><th>Side</th><th>Symbol</th><th class="num">Shares</th><th class="num">Price</th><th class="num">P/L</th><th>Reason</th></tr></thead>
+          <tbody>${rows.slice().reverse().map(row => `
+            <tr>
+              <td>${row.date}</td>
+              <td><span class="badge ${row.side}">${row.side}</span></td>
+              <td><strong>${row.symbol}</strong></td>
+              <td class="num">${num(row.shares)}</td>
+              <td class="num">${money(row.price)}</td>
+              <td class="num ${row.pnl === null ? "" : signedClass(row.pnl)}">${row.pnl === null ? "-" : money(row.pnl)}</td>
+              <td>${row.reason}</td>
+            </tr>
+          `).join("")}</tbody>
+        </table>
+      `;
+    }
+
+    function renderCard(row) {
+      if (row.error) {
+        return `<article class="panel stock-card"><div class="symbol"><strong>${row.symbol}</strong><span class="badge neutral">error</span></div><p class="status error">${row.error}</p></article>`;
+      }
+      const signal = row.rule_based || {};
+      const rating = signal.rating || "neutral";
+      return `
+        <article class="panel stock-card">
+          <div class="symbol"><strong>${row.symbol}</strong><span class="badge ${rating}">${rating}</span></div>
+          <div class="line"><span>Price</span><strong>${money(row.indicators.price)}</strong></div>
+          <div class="line"><span>RSI14</span><strong>${num(row.indicators.rsi14)}</strong></div>
+          <div class="line"><span>Daily return</span><strong>${num(row.indicators.daily_return_pct, "%")}</strong></div>
+          <p class="status">${signal.summary || ""}</p>
+        </article>
+      `;
+    }
+
+    async function loadDashboard() {
+      try {
+        statusEl.textContent = "Loading latest paper-trading run...";
+        const [response, historyResponse, ledgerResponse] = await Promise.all([
+          fetch(`data/latest.json?ts=${Date.now()}`),
+          fetch(`data/history.json?ts=${Date.now()}`),
+          fetch(`data/ledger.json?ts=${Date.now()}`),
+        ]);
+        if (!response.ok) throw new Error(`Could not load latest.json (${response.status})`);
+        const data = await response.json();
+        historyData = historyResponse.ok ? await historyResponse.json() : null;
+        ledgerData = ledgerResponse.ok ? await ledgerResponse.json() : null;
+        setBacktestDefaults();
+        latestData = data;
+        renderDashboard(data);
+        const updated = new Date(data.generated_at).toLocaleString();
+        statusEl.textContent = `Last updated: ${updated} | Symbols scanned: ${(data.symbols || []).length} | Auto-refresh: 30 min`;
+      } catch (error) {
+        statusEl.innerHTML = `<span class="error">${error.message}</span>`;
+        summaryEl.innerHTML = "";
+        llmEl.textContent = "Run the workflow or python src/analyze.py to generate docs/data/latest.json.";
+      }
+    }
+
+    tabs.forEach(tab => {
+      tab.addEventListener("click", () => {
+        tabs.forEach(item => item.setAttribute("aria-selected", String(item === tab)));
+        views.forEach(view => { view.hidden = view.id !== tab.dataset.tab; });
+      });
+    });
+
+    refresh.addEventListener("click", loadDashboard);
+    addFunds.addEventListener("click", () => {
+      const state = readLocalState();
+      const amount = Math.max(0, Number(fundAmount.value || 0));
+      writeLocalState({ ...state, addedFunds: Number(state.addedFunds || 0) + amount });
+    });
+    withdrawFunds.addEventListener("click", () => {
+      const state = readLocalState();
+      const amount = Math.max(0, Number(fundAmount.value || 0));
+      writeLocalState({ ...state, withdrawnFunds: Number(state.withdrawnFunds || 0) + amount });
+    });
+    toggleTrading.addEventListener("click", () => {
+      const state = readLocalState();
+      writeLocalState({ ...state, paused: !state.paused });
+    });
+    sellAll.addEventListener("click", () => {
+      const state = readLocalState();
+      writeLocalState({ ...state, liquidatedAt: new Date().toISOString().slice(0, 10) });
+    });
+    resetLocal.addEventListener("click", () => {
+      localStorage.removeItem(localStateKey);
+      renderDashboard(latestData);
+    });
+    runBacktest.addEventListener("click", () => {
+      const result = runLocalBacktest({
+        start: btStart.value,
+        end: btEnd.value,
+        style: btStyle.value,
+        capital: Number(btCapital.value || 0),
+      });
+      backtestResult.innerHTML = result.error ? `<p class="error">${result.error}</p>` : `
+        <div class="summary">
+          <article class="panel"><div class="metric-label">Ending Balance</div><div class="metric-value">${money(result.endingBalance)}</div></article>
+          <article class="panel"><div class="metric-label">Return</div><div class="metric-value ${signedClass(result.returnPct)}">${num(result.returnPct, "%")}</div></article>
+          <article class="panel"><div class="metric-label">Trades</div><div class="metric-value">${result.trades.length}</div></article>
+          <article class="panel"><div class="metric-label">Holdings</div><div class="metric-value">${Object.keys(result.positions).length}</div></article>
+        </div>
+        ${renderMiniTrades(result.trades)}
+      `;
+    });
+    window.addEventListener("resize", () => loadDashboard());
+    setInterval(loadDashboard, 30 * 60 * 1000);
+    loadDashboard();
+
+    function runLocalBacktest({ start, end, style, capital }) {
+      if (!historyData || !historyData.history) return { error: "Historical data is not loaded yet." };
+      if (!start || !end || !capital) return { error: "Choose start date, end date, and initial capital." };
+      const dates = [...new Set(Object.values(historyData.history).flat().map(row => row.date))]
+        .filter(date => date >= start && date <= end)
+        .sort();
+      if (dates.length < 30) return { error: "Not enough dates in the selected range." };
+      let cash = capital;
+      const positions = {};
+      const trades = [];
+      const maxPositions = style === "conservative" ? 3 : 5;
+      const allocation = style === "high_volatility" ? 0.16 : 0.2;
+      for (const date of dates) {
+        const market = localMarket(date);
+        for (const [symbol, position] of Object.entries({ ...positions })) {
+          const row = market[symbol];
+          if (!row) continue;
+          const pnlPct = ((row.close / position.avg) - 1) * 100;
+          if (pnlPct <= -8 || pnlPct >= (style === "high_volatility" ? 28 : 18) || row.close < row.sma20) {
+            cash += position.shares * row.close;
+            trades.push({ date, side: "SELL", symbol, shares: position.shares, price: row.close, pnl: (row.close - position.avg) * position.shares });
+            delete positions[symbol];
+          }
+        }
+        const ranked = Object.entries(market)
+          .filter(([symbol]) => !positions[symbol])
+          .map(([symbol, row]) => [symbol, localScore(row, style), row])
+          .sort((a, b) => b[1] - a[1]);
+        for (const [symbol, score, row] of ranked) {
+          if (Object.keys(positions).length >= maxPositions || score < 3) continue;
+          const spend = Math.min(cash * 0.95, portfolioValue(cash, positions, market) * allocation);
+          const shares = Math.floor(spend / row.close);
+          if (shares <= 0) continue;
+          cash -= shares * row.close;
+          positions[symbol] = { shares, avg: row.close };
+          trades.push({ date, side: "BUY", symbol, shares, price: row.close, pnl: null });
+        }
+      }
+      const market = localMarket(dates.at(-1));
+      const endingBalance = portfolioValue(cash, positions, market);
+      return { endingBalance, returnPct: ((endingBalance / capital) - 1) * 100, trades, positions };
+    }
+
+    function setBacktestDefaults() {
+      if (!historyData || !historyData.history || btStart.value || btEnd.value) return;
+      const dates = [...new Set(Object.values(historyData.history).flat().map(row => row.date))].sort();
+      if (!dates.length) return;
+      btEnd.value = dates.at(-1);
+      btStart.value = dates[Math.max(0, dates.length - 90)];
+    }
+
+    function localMarket(date) {
+      const market = {};
+      for (const [symbol, rows] of Object.entries(historyData.history)) {
+        const idx = rows.findIndex(row => row.date === date);
+        if (idx < 60) continue;
+        const window = rows.slice(0, idx + 1);
+        const close = window.at(-1).close;
+        const sma20 = avg(window.slice(-20).map(row => row.close));
+        const sma60 = avg(window.slice(-60).map(row => row.close));
+        const prev = window.at(-2)?.close || close;
+        market[symbol] = { close, sma20, sma60, dailyReturn: ((close / prev) - 1) * 100 };
+      }
+      return market;
+    }
+
+    function localScore(row, style) {
+      let score = 0;
+      if (row.close > row.sma20) score += 1;
+      if (row.sma20 > row.sma60) score += 1;
+      if (row.dailyReturn > 0) score += 1;
+      if (style === "growth" || style === "high_volatility") score += row.dailyReturn > 1 ? 1 : 0;
+      if (style === "conservative") score += row.close > row.sma60 ? 1 : 0;
+      return score;
+    }
+
+    function portfolioValue(cash, positions, market) {
+      return cash + Object.entries(positions).reduce((sum, [symbol, position]) => {
+        return sum + (market[symbol] ? position.shares * market[symbol].close : 0);
+      }, 0);
+    }
+
+    function avg(values) {
+      return values.reduce((sum, value) => sum + value, 0) / values.length;
+    }
+
+    function renderMiniTrades(trades) {
+      return `<table><thead><tr><th>Date</th><th>Side</th><th>Symbol</th><th class="num">Shares</th><th class="num">Price</th><th class="num">P/L</th></tr></thead><tbody>${trades.slice(-30).reverse().map(row => `
+        <tr><td>${row.date}</td><td><span class="badge ${row.side}">${row.side}</span></td><td>${row.symbol}</td><td class="num">${row.shares}</td><td class="num">${money(row.price)}</td><td class="num ${row.pnl === null ? "" : signedClass(row.pnl)}">${row.pnl === null ? "-" : money(row.pnl)}</td></tr>
+      `).join("")}</tbody></table>`;
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,42 @@
+{
+  "mode": "paper_trading",
+  "cash": 0,
+  "balance": 0,
+  "total_return_pct": 0,
+  "holdings": [],
+  "trade_history": [],
+  "cash_movements": [],
+  "equity_curve": [
+    {
+      "date": "2026-05-22T01:50:32.780865+00:00",
+      "balance": 0,
+      "cash": 0
+    },
+    {
+      "date": "2026-05-22T01:51:25.987431+00:00",
+      "balance": 0,
+      "cash": 0
+    },
+    {
+      "date": "2026-05-22T02:17:05.580626+00:00",
+      "balance": 0,
+      "cash": 0
+    },
+    {
+      "date": "2026-05-22T02:37:03.803660+00:00",
+      "balance": 0,
+      "cash": 0
+    }
+  ],
+  "updated_at": "2026-05-22T02:37:03.803660+00:00",
+  "trading_enabled": true,
+  "strategy": {
+    "max_positions": 4,
+    "allocation_pct": 0.24,
+    "fee_bps": 2.0,
+    "trading_enabled": true,
+    "force_liquidate": false,
+    "buy_logic": "Buy strongest current candidates above trend confirmation score.",
+    "sell_logic": "Sell on trend break, overbought reversal, stop loss, take profit, or force liquidation."
+  }
+}

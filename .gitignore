@@ -1,0 +1,9 @@
+__pycache__/
+*.py[cod]
+.env
+.venv/
+venv/
+.DS_Store
+docs/data/latest.json
+!docs/data/
+!docs/data/paper_state.json
