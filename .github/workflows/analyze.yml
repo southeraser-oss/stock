@@ -58,8 +58,9 @@ jobs:
           ENABLE_TRADING_SKILLS: ${{ vars.ENABLE_TRADING_SKILLS || 'true' }}
           TRADING_SKILLS_MAX_CHARS: ${{ vars.TRADING_SKILLS_MAX_CHARS || '6000' }}
           HISTORY_PERIOD: ${{ vars.HISTORY_PERIOD || '2y' }}
-          BACKTEST_START_DATE: ${{ vars.BACKTEST_START_DATE || '2026-01-01' }}
+          BACKTEST_START_DATE: ${{ vars.BACKTEST_START_DATE || '' }}
           BACKTEST_END_DATE: ${{ vars.BACKTEST_END_DATE || '' }}
+          BACKTEST_LOOKBACK_DAYS: ${{ vars.BACKTEST_LOOKBACK_DAYS || '120' }}
           BACKTEST_STYLE: ${{ vars.BACKTEST_STYLE || 'momentum' }}
           BACKTEST_INITIAL_CAPITAL: ${{ vars.BACKTEST_INITIAL_CAPITAL || '100000' }}
           BACKTEST_MAX_POSITIONS: ${{ vars.BACKTEST_MAX_POSITIONS || '5' }}

@@ -30,13 +30,23 @@ cp .env.example .env
 python src/analyze.py
 ```
 
-Open `docs/index.html` through a local web server so the browser can fetch `docs/data/latest.json`:
+For the static GitHub Pages-style view, open `docs/index.html` through a local web server so the browser can fetch `docs/data/latest.json`:
 
 ```bash
 python -m http.server 8000 --directory docs
 ```
 
 Then visit `http://localhost:8000`.
+
+For the real interactive app, run the FastAPI backend instead:
+
+```bash
+uvicorn backend.app:app --reload --host 127.0.0.1 --port 8000
+```
+
+Then visit `http://127.0.0.1:8000`.
+
+In this mode, the Backtest page sends your selected dates, style, and initial capital to `/api/backtests`; the backend runs the analysis, calls AI when keys are configured, saves the result to SQLite, and returns the result to the dashboard.
 
 ## Configuration
 
@@ -63,8 +73,9 @@ Use GitHub repository variables for non-secret values:
 | `ENABLE_TRADING_SKILLS` | `true` |
 | `TRADING_SKILLS_MAX_CHARS` | `6000` |
 | `HISTORY_PERIOD` | `2y` |
-| `BACKTEST_START_DATE` | `2026-01-01` |
+| `BACKTEST_START_DATE` | empty, rolling window |
 | `BACKTEST_END_DATE` | empty, defaults to today |
+| `BACKTEST_LOOKBACK_DAYS` | `120` |
 | `BACKTEST_STYLE` | `momentum` |
 | `BACKTEST_INITIAL_CAPITAL` | `100000` |
 | `BACKTEST_MAX_POSITIONS` | `5` |
@@ -137,9 +148,27 @@ This is a simulation for analysis and iteration. It does not place real trades a
 
 ## Backtesting
 
-The dashboard has a Backtest page where you can choose start date, end date, trading style, and initial capital. The browser runs an immediate local backtest preview from `docs/data/history.json`.
+The dashboard has one AI Backtest page where you can choose start date, end date, trading style, and initial capital. It calls the FastAPI backend at `/api/backtests`. If the backend is not running, the page shows an error instead of silently falling back to a fake local calculation.
 
-The scheduled backend also runs a formal backtest using repository variables such as `BACKTEST_START_DATE`, `BACKTEST_END_DATE`, `BACKTEST_STYLE`, and `BACKTEST_INITIAL_CAPITAL`. With `AI_BACKTEST_ENABLED=true`, each trading day calls DeepSeek with only data available up to that day, applies the returned simulated orders, then calls OpenAI once at the end for a compressed high-quality review. That output is saved to `docs/data/backtest_latest.json` and included in `docs/data/latest.json`.
+When FastAPI is running, the page sends your choices directly to the backend, so you do not need to edit GitHub Variables for each experiment.
+
+The scheduled GitHub Actions backend can still run a formal default backtest using repository variables such as `BACKTEST_START_DATE`, `BACKTEST_END_DATE`, `BACKTEST_STYLE`, and `BACKTEST_INITIAL_CAPITAL`. With `AI_BACKTEST_ENABLED=true`, each trading day calls DeepSeek with only data available up to that day, applies the returned simulated orders, then calls OpenAI once at the end for a compressed high-quality review. That output is saved to `docs/data/backtest_latest.json` and included in `docs/data/latest.json`.
+
+If `BACKTEST_START_DATE` and `BACKTEST_END_DATE` are empty, the scheduled run uses a rolling window ending today. Control the length with `BACKTEST_LOOKBACK_DAYS`.
+
+The dashboard Automation panel shows the configured GitHub Actions cron, trigger type, run id, and run link when available. Scheduled AI Backtest also shows simulated buy/sell orders and the daily DeepSeek decision log.
+
+## Local Database
+
+The interactive backend uses SQLite at `data/stock_dashboard.sqlite3`.
+
+It stores:
+
+- Backtest requests and results
+- Deposit and withdrawal records
+- Review ledger rows
+
+This is the recommended mode when you want the frontend controls to actually change backend state.
 
 ## Review Ledger
 

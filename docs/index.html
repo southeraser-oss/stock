@@ -157,6 +157,10 @@
         <h2>Strategy</h2>
         <div id="strategy" class="status"></div>
       </article>
+      <article class="panel">
+        <h2>Automation</h2>
+        <div id="automationStatus" class="status"></div>
+      </article>
     </section>
 
     <section id="holdings" class="view panel" hidden>
@@ -171,7 +175,7 @@
 
     <section id="backtest" class="view" hidden>
       <article class="panel">
-        <h2>Backtest Lab</h2>
+        <h2>AI Backtest</h2>
         <div class="form-grid">
           <label class="status">Start date<input id="btStart" type="date"></label>
           <label class="status">End date<input id="btEnd" type="date"></label>
@@ -237,6 +241,7 @@
     const holdingsTable = document.querySelector("#holdingsTable");
     const tradesTable = document.querySelector("#tradesTable");
     const strategyEl = document.querySelector("#strategy");
+    const automationStatus = document.querySelector("#automationStatus");
     const sparkline = document.querySelector("#sparkline");
     const tabs = document.querySelectorAll(".tab");
     const views = document.querySelectorAll(".view");
@@ -343,6 +348,7 @@
       renderHoldings(portfolio.holdings || []);
       renderTrades(portfolio.trade_history || []);
       renderControlStatus(portfolio);
+      renderAutomation(data.automation || {});
       renderServerBacktest(data.backtest || {});
       renderLedger(data.ledger || ledgerData || {});
       cards.innerHTML = (data.stocks || []).map(renderCard).join("");
@@ -364,6 +370,21 @@
         <div class="line"><span>DeepSeek days</span><strong>${backtest.ai?.deepseek_ok_days ?? 0} ok / ${backtest.ai?.deepseek_skipped_days ?? 0} skipped / ${backtest.ai?.deepseek_error_days ?? 0} error</strong></div>
         <div class="line"><span>OpenAI review</span><strong>${backtest.ai?.openai_review?.status || "not available"}</strong></div>
         <p>${backtest.summary || ""}</p>
+        <h2>Scheduled Orders</h2>
+        ${renderMiniTrades(backtest.trade_history || [])}
+        <h2>Daily AI Decisions</h2>
+        ${renderDecisionTable(backtest.ai?.deepseek_daily_decisions || [])}
+      `;
+    }
+
+    function renderAutomation(automation) {
+      const runLink = automation.run_url ? `<a href="${automation.run_url}" target="_blank" rel="noreferrer">Open run</a>` : "local/not available";
+      automationStatus.innerHTML = `
+        <div class="line"><span>Scheduler</span><strong>${automation.scheduler || "unknown"}</strong></div>
+        <div class="line"><span>Cron</span><strong>${automation.cron || "n/a"}</strong></div>
+        <div class="line"><span>Every</span><strong>${automation.interval_minutes || "n/a"} min</strong></div>
+        <div class="line"><span>Trigger</span><strong>${automation.event_name || "n/a"}</strong></div>
+        <div class="line"><span>Run</span><strong>${runLink}</strong></div>
       `;
     }
 
@@ -537,68 +558,62 @@
       localStorage.removeItem(localStateKey);
       renderDashboard(latestData);
     });
-    runBacktest.addEventListener("click", () => {
-      const result = runLocalBacktest({
+    runBacktest.addEventListener("click", async () => {
+      const request = {
         start: btStart.value,
         end: btEnd.value,
         style: btStyle.value,
         capital: Number(btCapital.value || 0),
-      });
-      backtestResult.innerHTML = result.error ? `<p class="error">${result.error}</p>` : `
+      };
+      backtestResult.innerHTML = `<p class="status">Running backend AI backtest...</p>`;
+      const result = await runBackendBacktest(request);
+      backtestResult.innerHTML = result.error ? `<p class="error">Backend AI backtest failed: ${result.error}. Start FastAPI with uvicorn backend.app:app --reload --host 127.0.0.1 --port 8000.</p>` : `
         <div class="summary">
+          <article class="panel"><div class="metric-label">Source</div><div>${result.source}</div></article>
           <article class="panel"><div class="metric-label">Ending Balance</div><div class="metric-value">${money(result.endingBalance)}</div></article>
           <article class="panel"><div class="metric-label">Return</div><div class="metric-value ${signedClass(result.returnPct)}">${num(result.returnPct, "%")}</div></article>
           <article class="panel"><div class="metric-label">Trades</div><div class="metric-value">${result.trades.length}</div></article>
-          <article class="panel"><div class="metric-label">Holdings</div><div class="metric-value">${Object.keys(result.positions).length}</div></article>
         </div>
+        ${result.ai ? `<p class="status">DeepSeek: ${result.ai.deepseek_ok_days || 0} ok / ${result.ai.deepseek_skipped_days || 0} skipped / ${result.ai.deepseek_error_days || 0} error. OpenAI: ${result.ai.openai_review?.status || "not available"}.</p>` : ""}
         ${renderMiniTrades(result.trades)}
+        ${renderDecisionTable(result.ai?.deepseek_daily_decisions || [])}
       `;
     });
     window.addEventListener("resize", () => loadDashboard());
     setInterval(loadDashboard, 30 * 60 * 1000);
     loadDashboard();
 
-    function runLocalBacktest({ start, end, style, capital }) {
-      if (!historyData || !historyData.history) return { error: "Historical data is not loaded yet." };
+    async function runBackendBacktest({ start, end, style, capital }) {
       if (!start || !end || !capital) return { error: "Choose start date, end date, and initial capital." };
-      const dates = [...new Set(Object.values(historyData.history).flat().map(row => row.date))]
-        .filter(date => date >= start && date <= end)
-        .sort();
-      if (dates.length < 30) return { error: "Not enough dates in the selected range." };
-      let cash = capital;
-      const positions = {};
-      const trades = [];
-      const maxPositions = style === "conservative" ? 3 : 5;
-      const allocation = style === "high_volatility" ? 0.16 : 0.2;
-      for (const date of dates) {
-        const market = localMarket(date);
-        for (const [symbol, position] of Object.entries({ ...positions })) {
-          const row = market[symbol];
-          if (!row) continue;
-          const pnlPct = ((row.close / position.avg) - 1) * 100;
-          if (pnlPct <= -8 || pnlPct >= (style === "high_volatility" ? 28 : 18) || row.close < row.sma20) {
-            cash += position.shares * row.close;
-            trades.push({ date, side: "SELL", symbol, shares: position.shares, price: row.close, pnl: (row.close - position.avg) * position.shares });
-            delete positions[symbol];
-          }
-        }
-        const ranked = Object.entries(market)
-          .filter(([symbol]) => !positions[symbol])
-          .map(([symbol, row]) => [symbol, localScore(row, style), row])
-          .sort((a, b) => b[1] - a[1]);
-        for (const [symbol, score, row] of ranked) {
-          if (Object.keys(positions).length >= maxPositions || score < 3) continue;
-          const spend = Math.min(cash * 0.95, portfolioValue(cash, positions, market) * allocation);
-          const shares = Math.floor(spend / row.close);
-          if (shares <= 0) continue;
-          cash -= shares * row.close;
-          positions[symbol] = { shares, avg: row.close };
-          trades.push({ date, side: "BUY", symbol, shares, price: row.close, pnl: null });
-        }
+      try {
+        const response = await fetch("/api/backtests", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            start_date: start,
+            end_date: end,
+            style,
+            initial_capital: capital,
+            max_positions: 5,
+            allocation_pct: 0.2,
+            max_symbols: 35,
+            ai_enabled: true,
+          }),
+        });
+        if (!response.ok) throw new Error(`Backend returned ${response.status}`);
+        const payload = await response.json();
+        const result = payload.result;
+        return {
+          source: "backend AI run",
+          endingBalance: result.ending_balance,
+          returnPct: result.total_return_pct,
+          trades: result.trade_history || [],
+          positions: Object.fromEntries((result.holdings || []).map(row => [row.symbol, row])),
+          ai: result.ai,
+        };
+      } catch (error) {
+        return { error: error.message };
       }
-      const market = localMarket(dates.at(-1));
-      const endingBalance = portfolioValue(cash, positions, market);
-      return { endingBalance, returnPct: ((endingBalance / capital) - 1) * 100, trades, positions };
     }
 
     function setBacktestDefaults() {
@@ -609,44 +624,17 @@
       btStart.value = dates[Math.max(0, dates.length - 90)];
     }
 
-    function localMarket(date) {
-      const market = {};
-      for (const [symbol, rows] of Object.entries(historyData.history)) {
-        const idx = rows.findIndex(row => row.date === date);
-        if (idx < 60) continue;
-        const window = rows.slice(0, idx + 1);
-        const close = window.at(-1).close;
-        const sma20 = avg(window.slice(-20).map(row => row.close));
-        const sma60 = avg(window.slice(-60).map(row => row.close));
-        const prev = window.at(-2)?.close || close;
-        market[symbol] = { close, sma20, sma60, dailyReturn: ((close / prev) - 1) * 100 };
-      }
-      return market;
-    }
-
-    function localScore(row, style) {
-      let score = 0;
-      if (row.close > row.sma20) score += 1;
-      if (row.sma20 > row.sma60) score += 1;
-      if (row.dailyReturn > 0) score += 1;
-      if (style === "growth" || style === "high_volatility") score += row.dailyReturn > 1 ? 1 : 0;
-      if (style === "conservative") score += row.close > row.sma60 ? 1 : 0;
-      return score;
-    }
-
-    function portfolioValue(cash, positions, market) {
-      return cash + Object.entries(positions).reduce((sum, [symbol, position]) => {
-        return sum + (market[symbol] ? position.shares * market[symbol].close : 0);
-      }, 0);
-    }
-
-    function avg(values) {
-      return values.reduce((sum, value) => sum + value, 0) / values.length;
-    }
-
     function renderMiniTrades(trades) {
+      if (!trades || trades.length === 0) return `<div class="empty">No simulated buy/sell orders yet.</div>`;
       return `<table><thead><tr><th>Date</th><th>Side</th><th>Symbol</th><th class="num">Shares</th><th class="num">Price</th><th class="num">P/L</th></tr></thead><tbody>${trades.slice(-30).reverse().map(row => `
         <tr><td>${row.date}</td><td><span class="badge ${row.side}">${row.side}</span></td><td>${row.symbol}</td><td class="num">${row.shares}</td><td class="num">${money(row.price)}</td><td class="num ${row.pnl === null ? "" : signedClass(row.pnl)}">${row.pnl === null ? "-" : money(row.pnl)}</td></tr>
+      `).join("")}</tbody></table>`;
+    }
+
+    function renderDecisionTable(decisions) {
+      if (!decisions || decisions.length === 0) return `<div class="empty">No daily AI decision log yet.</div>`;
+      return `<table><thead><tr><th>Date</th><th>Status</th><th class="num">Orders</th><th>Review</th></tr></thead><tbody>${decisions.slice(-30).reverse().map(row => `
+        <tr><td>${row.date}</td><td>${row.status}</td><td class="num">${row.order_count || 0}</td><td>${row.review || row.error || ""}</td></tr>
       `).join("")}</tbody></table>`;
     }
   </script>

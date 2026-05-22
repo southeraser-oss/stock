@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import os
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import yfinance as yf
@@ -32,10 +32,12 @@ def main() -> None:
         trading_enabled=_bool_env("PAPER_TRADING_ENABLED", True),
         force_liquidate=_bool_env("PAPER_FORCE_LIQUIDATE", False),
     )
+    backtest_end = os.getenv("BACKTEST_END_DATE") or datetime.now(UTC).date().isoformat()
+    backtest_start = os.getenv("BACKTEST_START_DATE") or _rolling_start_date(backtest_end)
     backtest = run_backtest(
         histories=histories,
-        start_date=os.getenv("BACKTEST_START_DATE", "2026-01-01"),
-        end_date=os.getenv("BACKTEST_END_DATE") or datetime.now(UTC).date().isoformat(),
+        start_date=backtest_start,
+        end_date=backtest_end,
         style=os.getenv("BACKTEST_STYLE", "momentum"),
         initial_capital=_float_env("BACKTEST_INITIAL_CAPITAL", 100_000),
         max_positions=_int_env("BACKTEST_MAX_POSITIONS", 5),
@@ -54,6 +56,7 @@ def main() -> None:
         "backtest": backtest,
         "llm_analysis": llm_analysis,
         "ledger": ledger,
+        "automation": _automation_metadata(),
         "disclaimer": "Analysis and alerts only. No automatic trading.",
     }
 
@@ -112,6 +115,30 @@ def _bool_env(name: str, default: bool) -> bool:
     if value is None:
         return default
     return value.lower() in {"1", "true", "yes", "on"}
+
+
+def _rolling_start_date(end_date: str) -> str:
+    lookback_days = _int_env("BACKTEST_LOOKBACK_DAYS", 120)
+    parsed_end = datetime.fromisoformat(end_date).date()
+    return (parsed_end - timedelta(days=lookback_days)).isoformat()
+
+
+def _automation_metadata() -> dict[str, Any]:
+    run_id = os.getenv("GITHUB_RUN_ID")
+    server_url = os.getenv("GITHUB_SERVER_URL", "https://github.com")
+    repository = os.getenv("GITHUB_REPOSITORY")
+    run_url = f"{server_url}/{repository}/actions/runs/{run_id}" if run_id and repository else None
+    return {
+        "scheduler": "github_actions",
+        "cron": "*/30 * * * *",
+        "interval_minutes": 30,
+        "event_name": os.getenv("GITHUB_EVENT_NAME", "local"),
+        "run_id": run_id,
+        "run_number": os.getenv("GITHUB_RUN_NUMBER"),
+        "run_url": run_url,
+        "ref": os.getenv("GITHUB_REF"),
+        "sha": os.getenv("GITHUB_SHA"),
+    }
 
 
 if __name__ == "__main__":
